@@ -65,30 +65,27 @@ watch(
 
 <template>
   <div class="forum">
-    <aside class="side">
-      <p class="side-title">板块</p>
-      <RouterLink class="side-item" :class="{ active: !currentSlug }" to="/forum">
-        <span>全部</span>
-        <em>{{ total }}</em>
+    <header class="feed-head">
+      <h1>{{ heading }}</h1>
+      <p>{{ subheading }}</p>
+    </header>
+
+    <nav class="chips" aria-label="板块分类">
+      <RouterLink class="chip" :class="{ active: !currentSlug }" to="/forum">
+        全部 <em>{{ total }}</em>
       </RouterLink>
       <RouterLink
         v-for="c in categories"
         :key="c.id"
-        class="side-item"
+        class="chip"
         :class="{ active: currentSlug === c.slug }"
         :to="`/forum?category=${c.slug}`"
       >
-        <span>{{ c.name }}</span>
-        <em>{{ c.post_count }}</em>
+        {{ c.name }} <em>{{ c.post_count }}</em>
       </RouterLink>
-    </aside>
+    </nav>
 
     <section class="feed">
-      <header class="feed-head">
-        <h1>{{ heading }}</h1>
-        <p>{{ subheading }}</p>
-      </header>
-
       <div v-if="loading" class="empty">加载中…</div>
       <div v-else-if="!posts.length" class="empty">
         这里还空着。发第一条帖子，给大家开个头。
@@ -111,55 +108,60 @@ watch(
 
 <style scoped>
 .forum {
-  display: grid;
-  grid-template-columns: 210px 1fr;
-  gap: 30px;
-  align-items: start;
-}
-
-.side {
-  position: sticky;
-  top: 88px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
-.side-title {
-  margin: 0 0 8px;
-  padding: 0 10px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.side-item {
+.chips {
   display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 0 18px;
+  margin-bottom: 6px;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 14.5px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13.5px;
   color: #4b463d;
-  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 
-.side-item em {
+.chip em {
   font-style: normal;
-  font-size: 12.5px;
-  color: #a8a196;
+  font-size: 11.5px;
+  opacity: 0.55;
 }
 
-.side-item:hover {
-  background: #efece5;
+.chip:hover {
+  border-color: #d9d3c7;
 }
 
-.side-item.active {
-  background: #e9e5db;
-  color: var(--ink);
-  font-weight: 600;
+.chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
 }
+
+
+
+
+
+
 
 .feed-head {
   padding: 4px 2px 20px;
