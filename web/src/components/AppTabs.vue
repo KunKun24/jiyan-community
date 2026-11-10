@@ -21,6 +21,11 @@ const tabs: Tab[] = [
     icon: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
   },
   {
+    path: '/c/discuss',
+    label: '探讨',
+    icon: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3M12 17h.01',
+  },
+  {
     path: '/hot',
     label: '热门',
     icon: 'M13 2 4.5 13.5H11l-1 8.5L19.5 10H13z',
@@ -46,7 +51,9 @@ const mobileTabs = tabs.filter((t) => t.path !== '/settings')
 
 function isActive(path: string) {
   if (path === '/forum') return route.path === '/forum' || route.path.startsWith('/post/')
-  if (path === '/categories') return route.path === '/categories' || route.path.startsWith('/c/')
+  if (path === '/categories')
+    return route.path === '/categories' || (route.path.startsWith('/c/') && route.path !== '/c/discuss')
+  if (path === '/c/discuss') return route.path === '/c/discuss'
   return route.path === path
 }
 </script>
