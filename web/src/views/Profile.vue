@@ -61,6 +61,8 @@ const selected = ref<number[]>([])
 const delTarget = ref<MyPost | null>(null)
 const batchDelete = ref(false)
 const pendingIds = ref<number[]>([])
+const deleting = ref<number[]>([])
+const busyIds = ref<number[]>([])
 const opMsg = ref('')
 
 function flash(t: string) {
@@ -82,7 +84,10 @@ function toggleAll() {
 }
 
 async function setStatus(p: MyPost, status: string) {
+  if (busyIds.value.includes(p.id)) return
+  busyIds.value.push(p.id)
   const r = await patch<{ status: string }>(`/api/posts/${p.id}`, { status })
+  busyIds.value = busyIds.value.filter((x) => x !== p.id)
   if (!r.ok) {
     flash(r.msg)
     return
@@ -92,13 +97,23 @@ async function setStatus(p: MyPost, status: string) {
 }
 
 async function bulkStatus(status: string) {
-  for (const id of [...selected.value]) {
+  const ids = [...selected.value]
+  if (!ids.length) return
+  busyIds.value = ids
+  flash('正在处理…')
+  let done = 0
+  for (const id of ids) {
     const p = myPosts.value.find((x) => x.id === id)
-    if (p) await patch(`/api/posts/${p.id}`, { status })
-    if (p) p.status = status
+    if (!p) continue
+    const r = await patch(`/api/posts/${p.id}`, { status })
+    if (r.ok) {
+      p.status = status
+      done++
+    }
   }
-  flash(status === 'private' ? `已把 ${selected.value.length} 篇设为私密` : '已公开所选帖子')
+  busyIds.value = []
   selected.value = []
+  flash(status === 'private' ? `已把 ${done} 篇设为私密` : `已公开 ${done} 篇`)
 }
 
 function askDelete(p: MyPost) {
@@ -122,28 +137,35 @@ function closeModal() {
 async function doDelete() {
   if (batchDelete.value) {
     const ids = [...pendingIds.value]
+    // 先关弹窗、把行标成“删除中”，别让用户对着静止的界面等
+    closeModal()
+    deleting.value = ids
     let done = 0
     for (const id of ids) {
       const r = await del(`/api/posts/${id}`)
-      if (r.ok) done++
+      if (r.ok) {
+        done++
+        myPosts.value = myPosts.value.filter((p) => p.id !== id)
+      }
     }
-    myPosts.value = myPosts.value.filter((p) => !ids.includes(p.id))
+    deleting.value = []
     selected.value = []
-    closeModal()
-    flash(`已删除 ${done} 篇`)
+    flash(done === ids.length ? `已删除 ${done} 篇` : `删除了 ${done} 篇，有 ${ids.length - done} 篇没成功`)
     return
   }
+
   const p = delTarget.value
   if (!p) return
+  closeModal()
+  deleting.value = [p.id]
   const r = await del(`/api/posts/${p.id}`)
+  deleting.value = []
   if (!r.ok) {
     flash(r.msg)
-    closeModal()
     return
   }
   myPosts.value = myPosts.value.filter((x) => x.id !== p.id)
   selected.value = selected.value.filter((x) => x !== p.id)
-  closeModal()
   flash('帖子已删除')
 }
 
@@ -300,7 +322,7 @@ onMounted(async () => {
           v-for="p in myPosts"
           :key="p.id"
           class="item post-item"
-          :class="{ picked: selected.includes(p.id) }"
+          :class="{ picked: selected.includes(p.id), deleting: deleting.includes(p.id), busy: busyIds.includes(p.id) }"
         >
           <input
             class="pick"
@@ -315,6 +337,7 @@ onMounted(async () => {
             </span>
             <span class="item-meta">
               {{ p.category.name }} · {{ timeAgo(p.createdAt) }} · {{ fmtNum(p.views) }} 浏览
+              <span v-if="deleting.includes(p.id)" class="del-tip">删除中…</span>
             </span>
           </RouterLink>
           <div class="post-ops">
@@ -767,6 +790,17 @@ dd a {
   flex-direction: row;
   align-items: center;
   gap: 10px;
+}
+.post-item.busy {
+  opacity: 0.55;
+}
+.post-item.deleting {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.del-tip {
+  color: #b4432f;
+  margin-left: 6px;
 }
 .post-item.picked {
   background: #faf8f3;
