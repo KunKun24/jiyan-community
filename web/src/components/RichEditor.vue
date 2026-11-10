@@ -227,13 +227,13 @@ defineExpose({
         </div>
       </div>
       <div class="rte-pop-wrap">
-        <button type="button" :class="{ on: emojiOpen }" title="表情" @click.stop="toggleHTML(); emojiOpen = !emojiOpen">🙂 表情</button>
+        <button type="button" :class="{ on: emojiOpen }" title="表情" @click.stop="toggleHTML(); emojiOpen = !emojiOpen">表情</button>
         <div v-if="emojiOpen" class="rte-pop emojis">
           <button v-for="e in emojis" :key="e" type="button" class="e-btn" @click="addEmoji(e)">{{ e }}</button>
         </div>
       </div>
       <div class="rte-pop-wrap">
-        <button type="button" :class="{ on: linkOpen || editor.isActive('link') }" title="链接" @click.stop="openLink">🔗 链接</button>
+        <button type="button" :class="{ on: linkOpen || editor.isActive('link') }" title="链接" @click.stop="openLink">链接</button>
         <div v-if="linkOpen" class="rte-pop link-pop">
           <input v-model="linkUrl" type="text" placeholder="https://…" @keydown.enter.prevent="applyLink" />
           <button type="button" class="ok" @click="applyLink">确定</button>
