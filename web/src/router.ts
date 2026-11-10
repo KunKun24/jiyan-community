@@ -56,7 +56,7 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   if (!to.meta.admin) return true
-  if (!store.loaded) await loadMe()
+  if (!store.loaded || !store.user) await loadMe()
   if (!store.user) return { path: '/login', query: { redirect: to.fullPath } }
   if (store.user.role !== 'admin') return '/forum'
   return true

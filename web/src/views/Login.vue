@@ -2,7 +2,8 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '../components/AuthLayout.vue'
-import { post } from '../api'
+import { post, type User } from '../api'
+import { store } from '../store'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,11 +17,15 @@ async function submit() {
   if (!form.account.trim()) { error.value = '请先填写用户名或邮箱'; return }
   if (!form.password) { error.value = '请先填写密码'; return }
   loading.value = true
-  const r = await post('/api/auth/login', { ...form })
+  const r = await post<{ user: User }>('/api/auth/login', { ...form })
   loading.value = false
   if (!r.ok) {
     error.value = r.msg
     return
+  }
+  if (r.data?.user) {
+    store.user = r.data.user
+    store.loaded = true
   }
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/forum'
   router.push(redirect)

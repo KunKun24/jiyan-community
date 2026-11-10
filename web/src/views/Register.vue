@@ -2,7 +2,8 @@
 import { reactive, ref, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '../components/AuthLayout.vue'
-import { post } from '../api'
+import { post, type User } from '../api'
+import { store } from '../store'
 
 const router = useRouter()
 const route = useRoute()
@@ -56,11 +57,15 @@ async function submit() {
   if (form.password !== form.password2) { error.value = '两次输入的密码不一致'; return }
   if (!agree.value) { error.value = '请先阅读并同意用户协议和免责声明'; return }
   loading.value = true
-  const r = await post<{ user: unknown }>('/api/auth/register', { ...form, invite })
+  const r = await post<{ user: User }>('/api/auth/register', { ...form, invite })
   loading.value = false
   if (!r.ok) {
     error.value = r.msg
     return
+  }
+  if (r.data?.user) {
+    store.user = r.data.user
+    store.loaded = true
   }
   router.push('/forum')
 }
