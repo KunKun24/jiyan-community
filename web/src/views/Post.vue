@@ -31,6 +31,8 @@ interface Reply {
   id: number
   content: string
   createdAt: string
+  parentId: number | null
+  parentUsername: string | null
   author: Author
 }
 
@@ -60,6 +62,21 @@ const loading = ref(true)
 const errorMsg = ref('')
 
 const replyText = ref('')
+const replyTo = ref<{ id: number; username: string } | null>(null)
+const replyBox = ref<HTMLTextAreaElement | null>(null)
+
+function startReply(rp: Reply) {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  replyTo.value = { id: rp.id, username: rp.author.username }
+  replyBox.value?.focus()
+}
+
+function cancelReply() {
+  replyTo.value = null
+}
 const sending = ref(false)
 const replyError = ref('')
 const shareMsg = ref('')
@@ -169,13 +186,17 @@ async function submitReply() {
   const content = replyText.value.trim()
   if (!content) return
   sending.value = true
-  const r = await post(`/api/posts/${route.params.id}/replies`, { content })
+  const r = await post(`/api/posts/${route.params.id}/replies`, {
+    content,
+    parentId: replyTo.value?.id || null,
+  })
   sending.value = false
   if (!r.ok) {
     replyError.value = r.msg
     return
   }
   replyText.value = ''
+  replyTo.value = null
   await load()
 }
 
@@ -270,18 +291,26 @@ onMounted(load)
           <span class="reply-name">{{ rp.author.username }}</span>
           <span class="reply-floor">#{{ i + 1 }}</span>
           <span class="reply-time">{{ timeAgo(rp.createdAt) }}</span>
+          <button class="reply-btn" type="button" @click="startReply(rp)">回复</button>
         </div>
-        <div class="reply-body">{{ rp.content }}</div>
+        <div class="reply-body">
+          <span v-if="rp.parentUsername" class="reply-at">回复 @{{ rp.parentUsername }}：</span>{{ rp.content }}
+        </div>
       </article>
 
       <div class="reply-box">
         <template v-if="store.user">
+          <div v-if="replyTo" class="reply-target">
+            回复 @{{ replyTo.username }}
+            <button type="button" @click="cancelReply">取消</button>
+          </div>
           <textarea
+            ref="replyBox"
             v-model="replyText"
             class="reply-input"
             rows="4"
             maxlength="5000"
-            placeholder="写下你的回复…"
+            :placeholder="replyTo ? `回复 @${replyTo.username}…` : '写下你的回复…'"
           ></textarea>
           <p v-if="replyError" class="reply-error">{{ replyError }}</p>
           <div class="reply-actions">
@@ -644,6 +673,9 @@ onMounted(load)
   display: block;
   margin: 12px 0;
 }
+.post-body :deep(img[data-width]) {
+  max-width: none;
+}
 .post-body :deep(img.img-spoiler) {
   filter: blur(16px);
   cursor: zoom-in;
@@ -705,5 +737,38 @@ onMounted(load)
   padding: 12px;
   overflow-x: auto;
   font-size: 13px;
+}
+.reply-btn {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.reply-btn:hover {
+  color: var(--accent);
+}
+.reply-at {
+  color: var(--accent);
+  font-size: 13.5px;
+}
+.reply-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.reply-target button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
 }
 </style>

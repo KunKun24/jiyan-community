@@ -24,14 +24,14 @@ const SANITIZE = {
   ],
   allowedAttributes: {
     a: ['href', 'target', 'rel', 'title'],
-    img: ['src', 'alt', 'title', 'data-spoiler', 'class', 'width', 'height'],
+    img: ['src', 'alt', 'title', 'data-spoiler', 'data-width', 'class', 'width', 'height', 'style'],
     video: ['src', 'poster', 'controls', 'preload', 'class'],
     span: ['style', 'class'],
     p: ['class'],
   },
   allowedSchemes: ['http', 'https', 'mailto'],
   allowedStyles: {
-    '*': { color: [/^#[0-9a-f]{3,8}$/i, /^rgba?\([^)]*\)$/i] },
+    '*': { color: [/^#[0-9a-f]{3,8}$/i, /^rgba?\([^)]*\)$/i], width: [/^\d{1,3}%$/] },
   },
   disallowedTagsMode: 'discard',
 }
@@ -248,8 +248,12 @@ r.get('/posts/:id', async (req, res) => {
     await q('UPDATE posts SET views = views + 1 WHERE id = ?', [id])
 
     const replies = await q(
-      `SELECT r.id, r.content, r.created_at, r.user_id, u.username, u.avatar
-         FROM replies r JOIN users u ON u.id = r.user_id
+      `SELECT r.id, r.content, r.created_at, r.user_id, u.username, u.avatar,
+              r.parent_id, pu.username AS parent_username
+         FROM replies r
+         JOIN users u ON u.id = r.user_id
+         LEFT JOIN replies pr ON pr.id = r.parent_id
+         LEFT JOIN users pu ON pu.id = pr.user_id
         WHERE r.post_id = ? ORDER BY r.id ASC`,
       [id],
     )
@@ -282,11 +286,36 @@ r.get('/posts/:id', async (req, res) => {
         id: x.id,
         content: x.content,
         createdAt: x.created_at,
+        parentId: x.parent_id || null,
+        parentUsername: x.parent_username || null,
         author: authorOf(x),
       })),
     })
   } catch (e) {
     console.error('[forum.post]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 作者或管理员设置公开/私密 */
+r.patch('/posts/:id', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const id = Number(req.params.id)
+    const status = String(req.body?.status || '')
+    if (!id) return FAIL(res, '参数错误')
+    if (!['public', 'private'].includes(status)) return FAIL(res, '状态只能是 public 或 private')
+
+    const p = await one('SELECT id, user_id FROM posts WHERE id=?', [id])
+    if (!p) return FAIL(res, '帖子不存在', 404)
+    const me = await one('SELECT role FROM users WHERE id=?', [uid])
+    if (p.user_id !== uid && me?.role !== 'admin') return FAIL(res, '没有权限', 403)
+
+    await q('UPDATE posts SET status=? WHERE id=?', [status, id])
+    return OK(res, { status }, status === 'private' ? '已设为私密' : '已公开')
+  } catch (e) {
+    console.error('[forum.patch]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })
@@ -305,7 +334,18 @@ r.post('/posts/:id/replies', async (req, res) => {
     const p = await one('SELECT id FROM posts WHERE id=?', [id])
     if (!p) return FAIL(res, '帖子不存在', 404)
 
-    await q('INSERT INTO replies (post_id, user_id, content) VALUES (?,?,?)', [id, uid, content])
+    let parentId = Number(req.body?.parentId || 0) || null
+    if (parentId) {
+      const parent = await one('SELECT id FROM replies WHERE id=? AND post_id=?', [parentId, id])
+      if (!parent) parentId = null
+    }
+
+    await q('INSERT INTO replies (post_id, user_id, content, parent_id) VALUES (?,?,?,?)', [
+      id,
+      uid,
+      content,
+      parentId,
+    ])
     await q('UPDATE posts SET reply_count = reply_count + 1, last_reply_at = NOW() WHERE id = ?', [id])
     await q('UPDATE users SET points = points + 2 WHERE id = ?', [uid])
     return OK(res, {}, '回复成功')

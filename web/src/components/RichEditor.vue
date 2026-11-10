@@ -19,6 +19,12 @@ const SpoilerImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-width') || null,
+        renderHTML: (attrs: Record<string, any>) =>
+          attrs.width ? { 'data-width': attrs.width, style: `width:${attrs.width}%` } : {},
+      },
       spoiler: {
         default: false,
         parseHTML: (el: HTMLElement) => el.getAttribute('data-spoiler') === '1',
@@ -184,6 +190,12 @@ async function onVideo(e: Event) {
     .run()
 }
 
+const imgSizes = [25, 50, 75, 100, 200]
+
+function setImgWidth(w: number) {
+  editor.value?.chain().focus().updateAttributes('image', { width: String(w) }).run()
+}
+
 function toggleSpoiler() {
   if (!editor.value?.isActive('image')) {
     note.value = '先点一下帖子里的图片，再选择是否遮挡'
@@ -243,6 +255,17 @@ defineExpose({
       <button type="button" title="上传图片" @click="toggleHTML(); pickImg()">图片</button>
       <button type="button" title="上传视频" @click="toggleHTML(); pickVid()">视频</button>
       <button type="button" title="遮挡选中图片" @click="toggleHTML(); toggleSpoiler()">遮挡</button>
+      <template v-if="editor.isActive('image')">
+        <span class="rte-sep"></span>
+        <span class="rte-label">大小</span>
+        <button
+          v-for="w in imgSizes"
+          :key="w"
+          type="button"
+          :class="{ on: (editor.getAttributes('image') as any).width === String(w) || (!(editor.getAttributes('image') as any).width && w === 100) }"
+          @click="toggleHTML(); setImgWidth(w)"
+        >{{ w }}%</button>
+      </template>
       <span class="rte-sep"></span>
       <button type="button" title="撤销" @click="editor.chain().focus().undo().run()">↺</button>
       <button type="button" title="重做" @click="editor.chain().focus().redo().run()">↻</button>
@@ -426,6 +449,11 @@ defineExpose({
   color: #2b5cad;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+ .rte-label {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 2px;
 }
 :deep(.rte-content img) {
   max-width: 100%;

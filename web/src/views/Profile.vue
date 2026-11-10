@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { get, post } from '../api'
+import { del, get, patch, post } from '../api'
 import { fmtNum, initial, timeAgo } from '../format'
 
 interface Profile {
@@ -57,6 +57,87 @@ const checkedIn = ref(false)
 const checkinMsg = ref('')
 const myPosts = ref<MyPost[]>([])
 const bookmarks = ref<Bookmark[]>([])
+const selected = ref<number[]>([])
+const delTarget = ref<MyPost | null>(null)
+const batchDelete = ref(false)
+const opMsg = ref('')
+
+function flash(t: string) {
+  opMsg.value = t
+  setTimeout(() => {
+    if (opMsg.value === t) opMsg.value = ''
+  }, 2400)
+}
+
+function toggleSel(id: number) {
+  const i = selected.value.indexOf(id)
+  if (i >= 0) selected.value.splice(i, 1)
+  else selected.value.push(id)
+}
+
+function toggleAll() {
+  if (selected.value.length === myPosts.value.length) selected.value = []
+  else selected.value = myPosts.value.map((p) => p.id)
+}
+
+async function setStatus(p: MyPost, status: string) {
+  const r = await patch<{ status: string }>(`/api/posts/${p.id}`, { status })
+  if (!r.ok) {
+    flash(r.msg)
+    return
+  }
+  p.status = status
+  flash(status === 'private' ? '已设为私密，只有你自己能看' : '已公开')
+}
+
+async function bulkStatus(status: string) {
+  for (const id of [...selected.value]) {
+    const p = myPosts.value.find((x) => x.id === id)
+    if (p) await patch(`/api/posts/${p.id}`, { status })
+    if (p) p.status = status
+  }
+  flash(status === 'private' ? `已把 ${selected.value.length} 篇设为私密` : '已公开所选帖子')
+  selected.value = []
+}
+
+function askDelete(p: MyPost) {
+  delTarget.value = p
+  batchDelete.value = false
+}
+
+function askBulkDelete() {
+  if (!selected.value.length) return
+  delTarget.value = null
+  batchDelete.value = true
+}
+
+async function doDelete() {
+  if (batchDelete.value) {
+    const ids = [...selected.value]
+    let done = 0
+    for (const id of ids) {
+      const r = await del(`/api/posts/${id}`)
+      if (r.ok) done++
+    }
+    myPosts.value = myPosts.value.filter((p) => !ids.includes(p.id))
+    selected.value = []
+    batchDelete.value = false
+    flash(`已删除 ${done} 篇`)
+    return
+  }
+  const p = delTarget.value
+  if (!p) return
+  const r = await del(`/api/posts/${p.id}`)
+  if (!r.ok) {
+    flash(r.msg)
+    delTarget.value = null
+    return
+  }
+  myPosts.value = myPosts.value.filter((x) => x.id !== p.id)
+  selected.value = selected.value.filter((x) => x !== p.id)
+  delTarget.value = null
+  flash('帖子已删除')
+}
 
 function todayStr() {
   const d = new Date()
@@ -182,18 +263,87 @@ onMounted(async () => {
     </section>
 
     <section class="card">
-      <h2>我的帖子</h2>
+      <div class="post-head">
+        <h2>我的帖子</h2>
+        <div class="post-tools">
+          <span v-if="opMsg" class="op-msg">{{ opMsg }}</span>
+          <label v-if="myPosts.length" class="pick-all">
+            <input
+              type="checkbox"
+              :checked="myPosts.length > 0 && selected.length === myPosts.length"
+              @change="toggleAll"
+            />
+            全选
+          </label>
+        </div>
+      </div>
+
+      <div v-if="selected.length" class="bulk-bar">
+        <span>已选 {{ selected.length }} 篇</span>
+        <button type="button" @click="bulkStatus('private')">设为私密</button>
+        <button type="button" @click="bulkStatus('public')">设为公开</button>
+        <button type="button" class="danger" @click="askBulkDelete">删除</button>
+        <button type="button" class="plain" @click="selected = []">取消</button>
+      </div>
+
       <p v-if="!myPosts.length" class="empty">还没发过帖子。</p>
       <div v-else class="list">
-        <RouterLink v-for="p in myPosts" :key="p.id" class="item" :to="`/post/${p.id}`">
-          <span class="item-title">
-            {{ p.title }}
-            <span v-if="p.status === 'private'" class="badge">私密</span>
-          </span>
-          <span class="item-meta">
-            {{ p.category.name }} · {{ timeAgo(p.createdAt) }} · {{ fmtNum(p.views) }} 浏览
-          </span>
-        </RouterLink>
+        <div
+          v-for="p in myPosts"
+          :key="p.id"
+          class="item post-item"
+          :class="{ picked: selected.includes(p.id) }"
+        >
+          <input
+            class="pick"
+            type="checkbox"
+            :checked="selected.includes(p.id)"
+            @change="toggleSel(p.id)"
+          />
+          <RouterLink class="post-link" :to="`/post/${p.id}`">
+            <span class="item-title">
+              {{ p.title }}
+              <span v-if="p.status === 'private'" class="badge">私密</span>
+            </span>
+            <span class="item-meta">
+              {{ p.category.name }} · {{ timeAgo(p.createdAt) }} · {{ fmtNum(p.views) }} 浏览
+            </span>
+          </RouterLink>
+          <div class="post-ops">
+            <button
+              class="op"
+              type="button"
+              :title="p.status === 'private' ? '设为公开' : '设为私密'"
+              @click.prevent="setStatus(p, p.status === 'private' ? 'public' : 'private')"
+            >
+              <svg v-if="p.status === 'private'" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <path d="M7 11V8a5 5 0 0 1 9.5-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                <rect x="4" y="11" width="16" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <rect x="4" y="11" width="16" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.7" />
+              </svg>
+            </button>
+            <button class="op danger" type="button" title="删除" @click.prevent="askDelete(p)">
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="delTarget || batchDelete" class="modal-mask" @click.self="delTarget = null; batchDelete = false">
+        <div class="modal">
+          <h3>{{ batchDelete ? '批量删除帖子' : '删除帖子' }}</h3>
+          <p v-if="batchDelete">将删除选中的 {{ selected.length }} 篇帖子，回复、点赞、收藏一并清掉，不能恢复。</p>
+          <p v-else>《{{ delTarget?.title }}》会被永久删除，回复、点赞、收藏一并清掉，不能恢复。</p>
+          <div class="modal-acts">
+            <button class="btn-ghost" type="button" @click="delTarget = null; batchDelete = false">取消</button>
+            <button class="btn-danger" type="button" @click="doDelete">确认删除</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -548,5 +698,109 @@ dd a {
   .card {
     padding: 18px 16px;
   }
+}
+.post-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.post-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.op-msg {
+  font-size: 12.5px;
+  color: var(--accent);
+}
+.pick-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: #f4f1ea;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.bulk-bar button {
+  border: 1px solid #ddd6c9;
+  background: #fff;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.bulk-bar button.danger {
+  color: #b4432f;
+  border-color: #e8c9c1;
+}
+.bulk-bar button.plain {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+}
+.post-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.post-item.picked {
+  background: #faf8f3;
+}
+.post-item .pick {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: #3e5c4b;
+  cursor: pointer;
+}
+.post-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+}
+.post-ops {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+.op {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.op:hover {
+  background: #f1ede5;
+  color: var(--ink);
+}
+.op.danger:hover {
+  background: #fbf0ed;
+  color: #b4432f;
 }
 </style>

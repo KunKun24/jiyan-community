@@ -13,6 +13,11 @@ export const pool = mysql.createPool({
   dateStrings: true,
 })
 
+// 会话时区固定为北京时间，避免 NOW() 按 UTC 落库导致前端差 8 小时
+pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+08:00'")
+})
+
 /** 查询：返回行数组 */
 export async function q(sql, params = []) {
   const [rows] = await pool.query(sql, params)
