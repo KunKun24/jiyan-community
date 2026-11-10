@@ -100,13 +100,59 @@ r.get('/admin/posts', async (req, res) => {
 r.patch('/admin/posts/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const status = String(req.body?.status || '')
     if (!id) return FAIL(res, '参数错误')
-    if (!['public', 'private'].includes(status)) return FAIL(res, '状态不合法')
-    await q('UPDATE posts SET status=? WHERE id=?', [status, id])
-    return OK(res, { status }, status === 'private' ? '已设为私密' : '已公开')
+    const status = req.body?.status
+    const pinned = req.body?.pinned
+    if (status === undefined && pinned === undefined) return FAIL(res, '没有要改的内容')
+    if (status !== undefined) {
+      if (!['public', 'private'].includes(status)) return FAIL(res, '状态不合法')
+      await q('UPDATE posts SET status=? WHERE id=?', [status, id])
+    }
+    if (pinned !== undefined) {
+      await q('UPDATE posts SET pinned=? WHERE id=?', [pinned ? 1 : 0, id])
+    }
+    return OK(res, { status, pinned }, pinned !== undefined ? (pinned ? '已置顶' : '已取消置顶') : status === 'private' ? '已设为私密' : '已公开')
   } catch (e) {
     console.error('[admin.patchPost]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 敏感词 ---------------- */
+
+r.get('/admin/sensitive-words', async (_req, res) => {
+  try {
+    const rows = await q('SELECT id, word, created_at FROM sensitive_words ORDER BY id DESC LIMIT 500')
+    return OK(res, { items: rows })
+  } catch (e) {
+    console.error('[admin.words]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.post('/admin/sensitive-words', async (req, res) => {
+  try {
+    const word = String(req.body?.word || '').trim().slice(0, 50)
+    if (!word) return FAIL(res, '请输入词语')
+    try {
+      await q('INSERT INTO sensitive_words (word) VALUES (?)', [word])
+    } catch (e) {
+      if (e.code === 'ER_DUP_ENTRY') return FAIL(res, '这个词已经在列表里了')
+      throw e
+    }
+    return OK(res, { word }, '已添加')
+  } catch (e) {
+    console.error('[admin.addWord]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.delete('/admin/sensitive-words/:id', async (req, res) => {
+  try {
+    await q('DELETE FROM sensitive_words WHERE id=?', [Number(req.params.id)])
+    return OK(res, {}, '已删除')
+  } catch (e) {
+    console.error('[admin.delWord]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })

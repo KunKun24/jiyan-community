@@ -22,6 +22,7 @@ interface PostItem {
   views: number
   replyCount: number
   createdAt: string
+  pinned?: number
   lastReplyAt: string | null
   author: { id: number; username: string }
   category: { id: number; name: string; slug: string }
@@ -32,6 +33,9 @@ const categories = ref<Category[]>([])
 const posts = ref<PostItem[]>([])
 const total = ref(0)
 const loading = ref(true)
+const online = ref(0)
+const trending = ref<PostItem[]>([])
+const weekly = ref<PostItem[]>([])
 
 const currentSlug = computed(() => String(route.query.category || ''))
 const currentCategory = computed(() => categories.value.find((c) => c.slug === currentSlug.value))
@@ -56,8 +60,25 @@ async function loadPosts() {
   loading.value = false
 }
 
+async function loadHighlights() {
+  const [a, b] = await Promise.all([
+    get<{ posts: PostItem[] }>('/api/posts?sort=day&size=5'),
+    get<{ posts: PostItem[] }>('/api/posts?sort=week&size=5'),
+  ])
+  if (a.ok) trending.value = a.data?.posts ?? []
+  if (b.ok) weekly.value = b.data?.posts ?? []
+}
+
+async function loadOnline() {
+  const r = await get<{ count: number }>('/api/online/count')
+  if (r.ok) online.value = r.data?.count ?? 0
+}
+
+let onlineTimer: number | undefined
+
 onMounted(async () => {
-  await Promise.all([loadCategories(), loadPosts()])
+  await Promise.all([loadCategories(), loadPosts(), loadHighlights(), loadOnline()])
+  onlineTimer = window.setInterval(loadOnline, 30000)
 })
 
 watch(
@@ -72,7 +93,29 @@ watch(
     <header class="feed-head">
       <h1>{{ heading }}</h1>
       <p>{{ subheading }}</p>
+      <span class="online"><i></i>{{ online }} 人在线</span>
     </header>
+
+    <section class="highlights">
+      <div class="hl-card">
+        <h2>今日热议</h2>
+        <div v-if="!trending.length" class="hl-empty">今天还没什么动静。</div>
+        <RouterLink v-for="(p, i) in trending" :key="p.id" class="hl-row" :to="`/post/${p.id}`">
+          <b>{{ i + 1 }}</b>
+          <span>{{ p.title }}</span>
+          <em>{{ p.views }} 浏览</em>
+        </RouterLink>
+      </div>
+      <div class="hl-card">
+        <h2>本周热帖</h2>
+        <div v-if="!weekly.length" class="hl-empty">这周还没有热帖。</div>
+        <RouterLink v-for="(p, i) in weekly" :key="p.id" class="hl-row" :to="`/post/${p.id}`">
+          <b>{{ i + 1 }}</b>
+          <span>{{ p.title }}</span>
+          <em>{{ p.views }} 浏览</em>
+        </RouterLink>
+      </div>
+    </section>
 
     <nav class="chips" aria-label="板块分类">
       <RouterLink class="chip" :class="{ active: !currentSlug }" to="/forum">
@@ -100,7 +143,9 @@ watch(
           <img :src="p.cover" alt="" loading="lazy" />
           <span v-if="(p.imageCount || 0) > 1" class="thumb-more">+{{ (p.imageCount || 1) - 1 }}</span>
         </RouterLink>
-        <RouterLink class="row-title" :to="`/post/${p.id}`">{{ p.title }}</RouterLink>
+        <RouterLink class="row-title" :to="`/post/${p.id}`">
+          <span v-if="p.pinned" class="pin-tag">置顶</span>{{ p.title }}
+        </RouterLink>
         <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
         <div class="row-meta">
           <span class="tag">{{ p.category.name }}</span>
@@ -115,6 +160,20 @@ watch(
 </template>
 
 <style scoped>
+.online { position: absolute; right: 0; top: 6px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.online i { width: 7px; height: 7px; border-radius: 50%; background: #4a9d6a; box-shadow: 0 0 0 3px rgba(74,157,106,.15); }
+.highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 6px; }
+.hl-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.hl-card h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.hl-empty { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
+.hl-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; font-size: 13px; }
+.hl-row b { color: var(--accent); font-size: 12px; width: 14px; flex-shrink: 0; }
+.hl-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-row em { font-style: normal; font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
+.pin-tag { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 4px; background: #edf3ee; color: #3e5c4b; font-size: 11px; vertical-align: 1px; }
+@media (max-width: 700px) { .online { position: absolute; right: 0; top: 6px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.online i { width: 7px; height: 7px; border-radius: 50%; background: #4a9d6a; box-shadow: 0 0 0 3px rgba(74,157,106,.15); }
+.highlights { grid-template-columns: 1fr; } }
 .author-name { color: #a8a196; }
 .author-name:hover { color: var(--accent); }
 .forum {
@@ -174,6 +233,7 @@ watch(
 
 
 .feed-head {
+  position: relative;
   padding: 4px 2px 20px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 6px;

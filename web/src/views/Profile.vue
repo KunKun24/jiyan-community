@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { del, get, patch, post } from '../api'
 import { fmtNum, initial, timeAgo } from '../format'
+import InviteCard from '../components/InviteCard.vue'
+import AccountSecurity from '../components/AccountSecurity.vue'
 
 interface Profile {
   id: number
@@ -377,6 +379,10 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <InviteCard />
+
+    <AccountSecurity />
 
     <section class="card">
       <h2>我的收藏</h2>

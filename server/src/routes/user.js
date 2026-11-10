@@ -261,3 +261,125 @@ r.post(
 )
 
 export default r
+
+/* ---------------- 邀请好友 ---------------- */
+
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+function newInviteCode(len = 8) {
+  let s = ''
+  for (let i = 0; i < len; i++) s += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+  return s
+}
+
+r.get('/invites', auth, async (req, res) => {
+  try {
+    const uid = req.uid
+    let mine = await q('SELECT id, code, used_by, used_at, created_at FROM invites WHERE inviter_id=? ORDER BY id DESC LIMIT 20', [uid])
+    if (!mine.length) {
+      for (let i = 0; i < 3; i++) {
+        let code = newInviteCode()
+        for (let k = 0; k < 5; k++) {
+          const dup = await one('SELECT 1 AS x FROM invites WHERE code=?', [code])
+          if (!dup) break
+          code = newInviteCode()
+        }
+        await q('INSERT INTO invites (code, inviter_id) VALUES (?,?)', [code, uid])
+      }
+      mine = await q('SELECT id, code, used_by, used_at, created_at FROM invites WHERE inviter_id=? ORDER BY id DESC LIMIT 20', [uid])
+    }
+    const used = await q('SELECT COUNT(*) AS c FROM invites WHERE inviter_id=? AND used_by IS NOT NULL', [uid])
+    return OK(res, {
+      baseUrl: process.env.SITE_BASE_URL || 'http://shequ.xn--0try77c6um82w.cn',
+      invited: Number(used?.c || 0),
+      items: mine.map((i) => ({ id: i.id, code: i.code, used: !!i.used_by, usedAt: i.used_at, createdAt: i.created_at })),
+    })
+  } catch (e) {
+    console.error('[user.invites]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 修改邮箱 ---------------- */
+
+r.post('/email/send-code', auth, async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return FAIL(res, '邮箱格式不正确')
+    if (email.length > 190) return FAIL(res, '邮箱过长')
+    const dup = await one('SELECT id FROM users WHERE email=? AND id<>?', [email, req.uid])
+    if (dup) return FAIL(res, '这个邮箱已经被使用了')
+    const { issueCode } = await import('../codes.js')
+    const { sendMail } = await import('../mailer.js')
+    const { codeMail } = await import('../mail-template.js')
+    const code = await issueCode(email, 'email', req.ip || '')
+    const tpl = codeMail({ code, minutes: 5, purpose: '更换邮箱' })
+    await sendMail({ to: email, ...tpl })
+    return OK(res, {}, '验证码已发送')
+  } catch (e) {
+    console.error('[user.emailCode]', e)
+    return FAIL(res, e.message?.includes('频繁') ? e.message : '发送失败，请稍后再试', 500)
+  }
+})
+
+r.post('/email', auth, async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    const code = String(req.body?.code || '').trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return FAIL(res, '邮箱格式不正确')
+    if (!/^[A-Za-z0-9]{8}$/.test(code)) return FAIL(res, '验证码是 8 位字母数字')
+    const dup = await one('SELECT id FROM users WHERE email=? AND id<>?', [email, req.uid])
+    if (dup) return FAIL(res, '这个邮箱已经被使用了')
+    const { consumeCode } = await import('../codes.js')
+    const okCode = await consumeCode(email, 'email', code)
+    if (!okCode) return FAIL(res, '验证码错误或已过期')
+    await q('UPDATE users SET email=?, updated_at=NOW() WHERE id=?', [email, req.uid])
+    return OK(res, { email }, '邮箱已更新')
+  } catch (e) {
+    console.error('[user.email]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 登录记录 ---------------- */
+
+r.get('/logins', auth, async (req, res) => {
+  try {
+    const rows = await q(
+      'SELECT id, ip, ua, created_at FROM login_logs WHERE user_id=? ORDER BY id DESC LIMIT 20',
+      [req.uid],
+    )
+    return OK(res, { items: rows })
+  } catch (e) {
+    console.error('[user.logins]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 注销账号 ---------------- */
+
+r.post('/delete', auth, async (req, res) => {
+  try {
+    const password = String(req.body?.password || '')
+    if (!password) return FAIL(res, '请输入密码')
+    const u = await one('SELECT id, password_hash FROM users WHERE id=?', [req.uid])
+    if (!u) return FAIL(res, '用户不存在', 404)
+    const okPwd = await verifyPassword(password, u.password_hash)
+    if (!okPwd) return FAIL(res, '密码不正确')
+    if (u.id === 1) return FAIL(res, '这个账号不能注销')
+    await q('DELETE FROM post_likes WHERE user_id=?', [u.id])
+    await q('DELETE FROM bookmarks WHERE user_id=?', [u.id])
+    await q('DELETE FROM follows WHERE follower_id=? OR following_id=?', [u.id, u.id])
+    await q('DELETE FROM notifications WHERE user_id=? OR actor_id=?', [u.id, u.id])
+    await q('DELETE FROM reply_likes WHERE user_id=?', [u.id])
+    await q('DELETE FROM messages WHERE sender_id=?', [u.id])
+    await q('DELETE FROM conversations WHERE user_a=? OR user_b=?', [u.id, u.id])
+    await q('DELETE FROM post_views WHERE viewer=?', [`u:${u.id}`])
+    await q('DELETE FROM users WHERE id=?', [u.id])
+    const { clearSessionCookie } = await import('../session.js')
+    clearSessionCookie(res)
+    return OK(res, {}, '账号已注销')
+  } catch (e) {
+    console.error('[user.delete]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})

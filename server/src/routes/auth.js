@@ -73,11 +73,26 @@ r.post('/register', async (req, res) => {
     const [ok, msg] = await consumeCode(email, 'register', code)
     if (!ok) return FAIL(res, msg)
 
-    const result = await q('INSERT INTO users (username, email, password_hash) VALUES (?,?,?)', [
+    // 邀请码（可选）
+    let invitedBy = null
+    let inviteRow = null
+    const invite = String(req.body?.invite || '').trim().toUpperCase()
+    if (invite) {
+      inviteRow = await one('SELECT * FROM invites WHERE code=?', [invite])
+      if (!inviteRow) return FAIL(res, '邀请码不存在')
+      if (inviteRow.used_by) return FAIL(res, '这个邀请码已经被用过了')
+      invitedBy = inviteRow.inviter_id
+    }
+
+    const result = await q('INSERT INTO users (username, email, password_hash, invited_by) VALUES (?,?,?,?)', [
       username,
       email,
       hashPassword(password),
+      invitedBy,
     ])
+    if (inviteRow) {
+      await q('UPDATE invites SET used_by=?, used_at=NOW() WHERE id=? AND used_by IS NULL', [result.insertId, inviteRow.id])
+    }
     const user = await one('SELECT * FROM users WHERE id=?', [result.insertId])
     setSessionCookie(res, signSession({ uid: user.id }))
     return OK(res, { user: publicUser(user) }, '注册成功')
@@ -101,6 +116,11 @@ r.post('/login', async (req, res) => {
     if (Number(user.status) !== 1) return FAIL(res, '账号已被禁用')
     if (!verifyPassword(password, user.password_hash)) return FAIL(res, '账号或密码错误')
 
+    await q('INSERT INTO login_logs (user_id, ip, ua) VALUES (?,?,?)', [
+      user.id,
+      clientIp(req),
+      String(req.headers['user-agent'] || '').slice(0, 255),
+    ])
     setSessionCookie(res, signSession({ uid: user.id }))
     return OK(res, { user: publicUser(user) }, '登录成功')
   } catch (e) {

@@ -20,9 +20,10 @@
             <td>{{ p.category.name }}</td>
             <td>{{ fmtNum(p.views) }}</td>
             <td>{{ p.replyCount }}</td>
-            <td><span class="admin-badge" :class="p.status === 'public' ? 'ok' : ''">{{ p.status === 'public' ? '公开' : '私密' }}</span></td>
+            <td><span class="admin-badge" :class="p.status === 'public' ? 'ok' : ''">{{ p.status === 'public' ? '公开' : '私密' }}</span><span v-if="p.pinned" class="admin-badge ok" style="margin-left:4px">置顶</span></td>
             <td style="color:var(--muted);white-space:nowrap">{{ p.createdAt.slice(5, 16) }}</td>
             <td class="actions">
+              <button class="admin-btn ghost" @click="togglePinned(p)">{{ p.pinned ? '取消置顶' : '置顶' }}</button>
               <button class="admin-btn ghost" @click="toggleStatus(p)">{{ p.status === 'public' ? '设为私密' : '公开' }}</button>
               <button class="admin-btn danger" @click="remove(p)">{{ p.confirm ? '确认删除' : '删除' }}</button>
             </td>
@@ -44,7 +45,7 @@ import { onMounted, ref } from 'vue'
 import { del, get, patch } from '../../api'
 import { fmtNum } from '../../format'
 
-interface Item { id: number; title: string; status: string; views: number; replyCount: number; createdAt: string; userId: number; username: string; category: { name: string }; confirm?: boolean }
+interface Item { id: number; title: string; status: string; pinned: number; views: number; replyCount: number; createdAt: string; userId: number; username: string; category: { name: string }; confirm?: boolean }
 
 const items = ref<Item[]>([])
 const total = ref(0)
@@ -67,6 +68,12 @@ async function load() {
 
 function search() { page.value = 1; load() }
 function go(n: number) { page.value = n; load() }
+
+async function togglePinned(p: Item) {
+  const next = p.pinned ? 0 : 1
+  const r = await patch(`/api/admin/posts/${p.id}`, { pinned: next })
+  if (r.ok) p.pinned = next
+}
 
 async function toggleStatus(p: Item) {
   const next = p.status === 'public' ? 'private' : 'public'

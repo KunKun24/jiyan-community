@@ -258,6 +258,11 @@ r.get('/users/:id', async (req, res) => {
     const rcount = await one('SELECT COUNT(*) AS c FROM replies WHERE user_id=?', [id])
     const level = levelOf(growthOf(u))
     const viewer = sessionUser(req)?.uid || 0
+    const fc = await one('SELECT COUNT(*) AS c FROM follows WHERE following_id=?', [id])
+    const fg = await one('SELECT COUNT(*) AS c FROM follows WHERE follower_id=?', [id])
+    const isFollowing = viewer
+      ? await one('SELECT 1 AS x FROM follows WHERE follower_id=? AND following_id=?', [viewer, id])
+      : null
     const posts = await q(
       `SELECT p.id, p.title, p.views, p.reply_count, p.like_count, p.created_at,
               c.name AS category_name, c.slug AS category_slug,
@@ -278,9 +283,16 @@ r.get('/users/:id', async (req, res) => {
         contact: u.contact || '',
         createdAt: u.created_at,
         isMe: viewer === u.id,
+        isFollowing: !!isFollowing,
         level,
       },
-      stats: { posts: Number(pcount?.c || 0), replies: Number(rcount?.c || 0), likes: Number(u.likes_received || 0) },
+      stats: {
+        posts: Number(pcount?.c || 0),
+        replies: Number(rcount?.c || 0),
+        likes: Number(u.likes_received || 0),
+        followers: Number(fc?.c || 0),
+        following: Number(fg?.c || 0),
+      },
       posts: posts.map((p) => ({
         id: p.id,
         title: p.title,
@@ -306,6 +318,206 @@ function firstImage(html) {
 function countImages(html) {
   return (String(html || '').match(/<img\b/gi) || []).length
 }
+
+/* ---------------- 关注 ---------------- */
+
+r.post('/follows/:uid', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const target = Number(req.params.uid)
+    if (!target || target === uid) return FAIL(res, '不能关注自己')
+    const u = await one('SELECT id FROM users WHERE id=?', [target])
+    if (!u) return FAIL(res, '用户不存在', 404)
+    const exists = await one('SELECT 1 AS x FROM follows WHERE follower_id=? AND following_id=?', [uid, target])
+    if (exists) {
+      await q('DELETE FROM follows WHERE follower_id=? AND following_id=?', [uid, target])
+      return OK(res, { following: false }, '已取消关注')
+    }
+    await q('INSERT INTO follows (follower_id, following_id) VALUES (?,?)', [uid, target])
+    return OK(res, { following: true }, '已关注')
+  } catch (e) {
+    console.error('[social.follow]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.get('/feed/following', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const rows = await q(
+      `SELECT p.id, p.title, p.content, p.content_html, p.views, p.reply_count, p.pinned, p.created_at,
+              u.id AS user_id, u.username, u.avatar, c.name AS category_name, c.slug AS category_slug
+         FROM follows f
+         JOIN posts p ON p.user_id = f.following_id AND p.status='public'
+         JOIN users u ON u.id = p.user_id
+         JOIN categories c ON c.id = p.category_id
+        WHERE f.follower_id=?
+        ORDER BY p.created_at DESC LIMIT 50`,
+      [uid],
+    )
+    return OK(res, {
+      posts: rows.map((p) => ({
+        id: p.id,
+        title: p.title,
+        views: p.views,
+        pinned: Number(p.pinned || 0),
+        replyCount: p.reply_count,
+        createdAt: p.created_at,
+        author: { id: p.user_id, username: p.username, avatar: p.avatar },
+        category: { name: p.category_name, slug: p.category_slug },
+      })),
+    })
+  } catch (e) {
+    console.error('[social.feed]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 私信 ---------------- */
+
+async function convOf(id, uid) {
+  const c = await one('SELECT * FROM conversations WHERE id=?', [id])
+  if (!c) return null
+  if (c.user_a !== uid && c.user_b !== uid) return null
+  return c
+}
+const otherOf = (c, uid) => (c.user_a === uid ? c.user_b : c.user_a)
+
+r.get('/conversations', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const rows = await q(
+      `SELECT c.id, c.user_a, c.user_b, c.last_message_at,
+              IF(c.user_a=?, c.user_b, c.user_a) AS other_id,
+              (SELECT username FROM users WHERE id=IF(c.user_a=?, c.user_b, c.user_a)) AS other_name,
+              (SELECT avatar FROM users WHERE id=IF(c.user_a=?, c.user_b, c.user_a)) AS other_avatar,
+              (SELECT content FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1) AS last_text,
+              (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.sender_id<>? AND m.read_at IS NULL) AS unread
+         FROM conversations c
+        WHERE c.user_a=? OR c.user_b=?
+        ORDER BY c.last_message_at DESC LIMIT 50`,
+      [uid, uid, uid, uid, uid, uid],
+    )
+    return OK(res, {
+      items: rows.map((c) => ({
+        id: c.id,
+        otherId: c.other_id,
+        otherName: c.other_name,
+        otherAvatar: c.other_avatar,
+        lastText: c.last_text || '',
+        lastAt: c.last_message_at,
+        unread: Number(c.unread || 0),
+      })),
+    })
+  } catch (e) {
+    console.error('[social.conversations]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.post('/conversations', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const target = Number(req.body?.userId)
+    if (!target || target === uid) return FAIL(res, '不能和自己私信')
+    const u = await one('SELECT id FROM users WHERE id=?', [target])
+    if (!u) return FAIL(res, '用户不存在', 404)
+    const a = Math.min(uid, target)
+    const b = Math.max(uid, target)
+    let c = await one('SELECT * FROM conversations WHERE user_a=? AND user_b=?', [a, b])
+    if (!c) {
+      const ins = await q('INSERT INTO conversations (user_a, user_b) VALUES (?,?)', [a, b])
+      c = await one('SELECT * FROM conversations WHERE id=?', [ins.insertId])
+    }
+    return OK(res, { conversationId: c.id })
+  } catch (e) {
+    console.error('[social.createConv]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.get('/conversations/:id/messages', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const c = await convOf(Number(req.params.id), uid)
+    if (!c) return FAIL(res, '会话不存在', 404)
+    const rows = await q(
+      'SELECT id, sender_id, content, read_at, created_at FROM messages WHERE conversation_id=? ORDER BY id ASC LIMIT 500',
+      [c.id],
+    )
+    await q('UPDATE messages SET read_at=NOW() WHERE conversation_id=? AND sender_id<>? AND read_at IS NULL', [c.id, uid])
+    return OK(res, { items: rows, otherId: otherOf(c, uid) })
+  } catch (e) {
+    console.error('[social.messages]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.post('/conversations/:id/messages', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const c = await convOf(Number(req.params.id), uid)
+    if (!c) return FAIL(res, '会话不存在', 404)
+    const content = String(req.body?.content || '').trim().slice(0, 2000)
+    if (!content) return FAIL(res, '说点什么吧')
+    const { hitSensitive } = await import('../sensitive.js')
+    const badWord = await hitSensitive(content)
+    if (badWord) return FAIL(res, `消息包含不适合发送的词：${badWord}`)
+    const ins = await q('INSERT INTO messages (conversation_id, sender_id, content) VALUES (?,?,?)', [
+      c.id, uid, content,
+    ])
+    await q('UPDATE conversations SET last_message_at=NOW() WHERE id=?', [c.id])
+    const other = otherOf(c, uid)
+    const { pushTo } = await import('../rt.js')
+    const me = await one('SELECT username FROM users WHERE id=?', [uid])
+    pushTo(other, {
+      type: 'message',
+      conversationId: c.id,
+      message: {
+        id: ins.insertId,
+        senderId: uid,
+        senderName: me?.username || '',
+        content,
+        createdAt: new Date().toISOString(),
+      },
+    })
+    return OK(res, { id: ins.insertId }, '已发送')
+  } catch (e) {
+    console.error('[social.sendMessage]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.get('/messages/unread-count', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const row = await one(
+      `SELECT COUNT(*) AS c FROM messages m JOIN conversations c ON c.id=m.conversation_id
+        WHERE (c.user_a=? OR c.user_b=?) AND m.sender_id<>? AND m.read_at IS NULL`,
+      [uid, uid, uid],
+    )
+    return OK(res, { count: Number(row?.c || 0) })
+  } catch (e) {
+    console.error('[social.unread]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.get('/online/count', async (_req, res) => {
+  try {
+    const { onlineCount } = await import('../rt.js')
+    return OK(res, { count: onlineCount() })
+  } catch {
+    return OK(res, { count: 0 })
+  }
+})
 
 export { notify }
 export default r

@@ -17,11 +17,13 @@
     "@tiptap/extension-underline": "^3.33.1",
     "@tiptap/starter-kit": "^3.33.1",
     "@tiptap/vue-3": "^3.33.1",
+    "qrcode": "^1.5.4",
     "simple-icons": "^16.37.0",
     "vue": "^3.5.13",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { reactive, ref, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '../components/AuthLayout.vue'
 import { post } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 
+const invite = String(route.query.invite || '').trim()
 const form = reactive({
   username: '',
   email: '',
@@ -54,7 +56,7 @@ async function submit() {
   if (form.password !== form.password2) { error.value = '两次输入的密码不一致'; return }
   if (!agree.value) { error.value = '请先阅读并同意用户协议和免责声明'; return }
   loading.value = true
-  const r = await post<{ user: unknown }>('/api/auth/register', { ...form })
+  const r = await post<{ user: unknown }>('/api/auth/register', { ...form, invite })
   loading.value = false
   if (!r.ok) {
     error.value = r.msg

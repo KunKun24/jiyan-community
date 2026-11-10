@@ -1,27 +1,48 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppTabs from './AppTabs.vue'
 import { store, logout } from '../store'
 import { initial } from '../format'
 import { get } from '../api'
+import { connectRealtime, onRealtime } from '../realtime'
 import AnnouncementModal from './AnnouncementModal.vue'
 
 const router = useRouter()
 const route = useRoute()
 const unread = ref(0)
 
+const msgUnread = ref(0)
+
 async function loadUnread() {
   if (!store.user) {
     unread.value = 0
+    msgUnread.value = 0
     return
   }
-  const r = await get<{ unread: number }>('/api/notifications/count')
+  const [r, m] = await Promise.all([
+    get<{ unread: number }>('/api/notifications/count'),
+    get<{ count: number }>('/api/messages/unread-count'),
+  ])
   if (r.ok) unread.value = r.data?.unread || 0
+  if (m.ok) msgUnread.value = m.data?.count || 0
 }
 
-onMounted(loadUnread)
+let offRealtime: (() => void) | null = null
+onMounted(() => {
+  loadUnread()
+  if (store.user) {
+    connectRealtime()
+    offRealtime = onRealtime((d) => {
+      if (d.type === 'message') {
+        msgUnread.value++
+        loadUnread()
+      }
+    })
+  }
+})
 watch(() => route.fullPath, loadUnread)
+onBeforeUnmount(() => { offRealtime?.() })
 
 async function onLogout() {
   await logout()
@@ -47,6 +68,13 @@ async function onLogout() {
             </svg>
           </RouterLink>
           <template v-if="store.user">
+            <RouterLink class="icon-btn" to="/messages" title="私信" aria-label="私信">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7">
+                <path d="M4 6h16v10a2 2 0 0 1-2 2H9l-5 3V6Z" />
+                <path d="M8 10h8M8 13h5" />
+              </svg>
+              <i v-if="msgUnread" class="badge-dot">{{ msgUnread > 99 ? '99+' : msgUnread }}</i>
+            </RouterLink>
             <RouterLink class="icon-btn" to="/notifications" title="消息" aria-label="消息">
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7">
                 <path d="M12 3a6 6 0 0 0-6 6v4l-1.5 3h15L18 13V9a6 6 0 0 0-6-6Z" />

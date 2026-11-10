@@ -15,6 +15,7 @@ interface HomeUser {
   contact: string
   createdAt: string
   isMe: boolean
+  isFollowing: boolean
   level: { level: number; name: string; growth: number; nextName: string | null; nextAt: number | null; progress: number }
 }
 interface HomePost {
@@ -34,7 +35,8 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const user = ref<HomeUser | null>(null)
-const stats = ref({ posts: 0, replies: 0, likes: 0 })
+const stats = ref({ posts: 0, replies: 0, likes: 0, followers: 0, following: 0 })
+const followBusy = ref(false)
 const posts = ref<HomePost[]>([])
 const reportOpen = ref(false)
 const reportReason = ref('')
@@ -59,6 +61,23 @@ async function submitReport() {
   reportReason.value = ''
   reportContact.value = ''
   alert('已收到，管理员会看')
+}
+
+async function toggleFollow() {
+  if (!user.value || followBusy.value) return
+  followBusy.value = true
+  const r = await post<{ following: boolean }>(`/api/follows/${user.value.id}`, {})
+  followBusy.value = false
+  if (!r.ok || !r.data) return
+  user.value.isFollowing = r.data.following
+  stats.value.followers += r.data.following ? 1 : -1
+}
+
+async function openChat() {
+  if (!user.value) return
+  const r = await post<{ conversationId: number }>('/api/conversations', { userId: user.value.id })
+  if (!r.ok || !r.data) return
+  router.push(`/messages?c=${r.data.conversationId}`)
 }
 
 async function load() {
@@ -107,7 +126,17 @@ watch(() => route.params.id, load)
             </p>
           </div>
           <RouterLink v-if="user.isMe" class="btn-ghost" to="/me">这是我的主页 · 去改资料</RouterLink>
-          <button v-else-if="store.user" class="btn-ghost" type="button" @click="reportOpen = true">举报</button>
+          <template v-else-if="store.user">
+            <button
+              class="btn-follow"
+              :class="{ on: user.isFollowing }"
+              type="button"
+              :disabled="followBusy"
+              @click="toggleFollow"
+            >{{ followBusy ? '…' : user.isFollowing ? '已关注' : '关注' }}</button>
+            <button class="btn-ghost" type="button" @click="openChat">私信</button>
+            <button class="btn-ghost" type="button" @click="reportOpen = true">举报</button>
+          </template>
         </div>
 
         <p v-if="user.bio" class="bio">{{ user.bio }}</p>
@@ -122,6 +151,8 @@ watch(() => route.params.id, load)
           <div class="stat"><b>{{ fmtNum(stats.posts) }}</b><span>帖子</span></div>
           <div class="stat"><b>{{ fmtNum(stats.replies) }}</b><span>回复</span></div>
           <div class="stat"><b>{{ fmtNum(stats.likes) }}</b><span>获赞</span></div>
+          <div class="stat"><b>{{ fmtNum(stats.followers) }}</b><span>粉丝</span></div>
+          <div class="stat"><b>{{ fmtNum(stats.following) }}</b><span>关注</span></div>
         </div>
 
         <div class="progress">
@@ -184,6 +215,11 @@ watch(() => route.params.id, load)
 .ident h1 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
 .lv { font-size: 11px; font-weight: 600; color: #3e5c4b; background: #edf3ee; padding: 2px 7px; border-radius: 5px; }
 .meta { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; }
+.btn-follow {
+  height: 32px; padding: 0 14px; border-radius: 8px; font-size: 12.5px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+}
+.btn-follow.on { background: #fff; color: var(--accent); }
 .btn-ghost {
   height: 32px; padding: 0 12px; display: inline-flex; align-items: center;
   border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--ink);

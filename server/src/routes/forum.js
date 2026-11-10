@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { hitSensitive } from '../sensitive.js'
 import { clientIp } from '../ratelimit.js'
 import { one, q } from '../db.js'
 import sanitizeHtml from 'sanitize-html'
@@ -113,7 +114,7 @@ r.get('/posts', async (req, res) => {
     const category = String(req.query.category || '').trim()
     const tag = String(req.query.tag || '').trim()
     const sortIn = String(req.query.sort || 'new')
-    const sort = ['new', 'active', 'hot'].includes(sortIn) ? sortIn : 'new'
+    const sort = ['new', 'active', 'hot', 'week', 'day'].includes(sortIn) ? sortIn : 'new'
 
     const where = ["p.status = 'public'"]
     const params = []
@@ -127,16 +128,20 @@ r.get('/posts', async (req, res) => {
       )
       params.push(tag)
     }
+    if (sort === 'week') where.push('p.created_at >= NOW() - INTERVAL 7 DAY')
+    if (sort === 'day') where.push('p.created_at >= CURDATE()')
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const orderSql =
       sort === 'active'
-        ? 'p.last_reply_at DESC, p.created_at DESC'
+        ? 'p.pinned DESC, p.last_reply_at DESC, p.created_at DESC'
         : sort === 'hot'
-          ? 'p.views DESC, p.reply_count DESC, p.created_at DESC'
-          : 'p.created_at DESC'
+          ? 'p.pinned DESC, p.views DESC, p.reply_count DESC, p.created_at DESC'
+          : sort === 'week' || sort === 'day'
+            ? 'p.pinned DESC, p.views DESC, p.reply_count DESC'
+            : 'p.pinned DESC, p.created_at DESC'
 
     const rows = await q(
-      `SELECT p.id, p.title, p.content, p.content_html, p.views, p.reply_count, p.created_at, p.last_reply_at,
+      `SELECT p.id, p.title, p.content, p.content_html, p.views, p.reply_count, p.pinned, p.created_at, p.last_reply_at,
               p.user_id, u.username, u.avatar,
               c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
               (SELECT GROUP_CONCAT(t2.name ORDER BY t2.name SEPARATOR ',')
@@ -162,6 +167,7 @@ r.get('/posts', async (req, res) => {
         title: p.title,
         excerpt: excerpt(p.content),
         views: p.views,
+        pinned: Number(p.pinned || 0),
         replyCount: p.reply_count,
         createdAt: p.created_at,
         lastReplyAt: p.last_reply_at,
@@ -194,6 +200,8 @@ r.post('/posts', async (req, res) => {
     if (title.length < 2 || title.length > 120) return FAIL(res, '标题需 2-120 字')
     if (content.length < 1) return FAIL(res, '正文不能为空')
     if (content.length > 20000) return FAIL(res, '正文过长')
+    const badWord = await hitSensitive(`${title} ${content}`)
+    if (badWord) return FAIL(res, `内容包含不适合发布的词：${badWord}`)
 
     const cat = await one('SELECT id FROM categories WHERE id=?', [categoryId])
     if (!cat) return FAIL(res, '板块不存在')
@@ -403,6 +411,8 @@ r.post('/posts/:id/replies', async (req, res) => {
     if (!id) return FAIL(res, '参数错误')
     if (!content) return FAIL(res, '回复不能为空')
     if (content.length > 5000) return FAIL(res, '回复过长')
+    const badWord = await hitSensitive(content)
+    if (badWord) return FAIL(res, `回复包含不适合发布的词：${badWord}`)
 
     const p = await one('SELECT id, user_id, title FROM posts WHERE id=?', [id])
     if (!p) return FAIL(res, '帖子不存在', 404)

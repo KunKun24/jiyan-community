@@ -27,7 +27,7 @@ const menus = [
   { to: '/admin/users', label: '账号管理', icon: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20c0-2.8 2.7-5 6-5s6 2.2 6 5m1-5c3 .3 5 2.3 5 5' },
   { to: '/admin/banners', label: '轮播图', icon: 'M4 6h16v12H4zM8 6v12m8-12v12M4 10h4m8 0h4' },
   { to: '/admin/notices', label: '公告管理', icon: 'M4 9v6h4l5 4V5L8 9H4zm13-1a5 5 0 0 1 0 8' },
-  { to: '/admin/categories', label: '板块管理', icon: 'M4 5h7v7H4V5zm9 0h7v7h-7V5zM4 14h7v5H4v-5zm9 0h7v5h-7v-5z' },
+  { to: '/admin/words', label: '敏感词', icon: 'M4 5h7v7H4V5zm9 0h7v7h-7V5zM4 14h7v5H4v-5zm9 0h7v5h-7v-5z' },
 ]
 </script>
 
