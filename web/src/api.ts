@@ -30,3 +30,19 @@ export const post = <T>(url: string, body: unknown) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+
+export const patch = <T>(url: string, body: unknown) =>
+  request<T>(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+export async function upload<T>(url: string, form: FormData): Promise<ApiResp<T>> {
+  try {
+    const res = await fetch(url, { method: 'POST', credentials: 'include', body: form })
+    return (await res.json()) as ApiResp<T>
+  } catch {
+    return { ok: false, msg: '网络错误，请稍后重试' }
+  }
+}

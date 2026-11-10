@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import authRouter from './src/routes/auth.js';
 import forumRouter from './src/routes/forum.js';
+import userRouter from './src/routes/user.js';
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -14,6 +15,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api', forumRouter);
+app.use('/api/user', userRouter);
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, msg: '接口不存在' });

@@ -11,6 +11,7 @@ export default createRouter({
     { path: '/forum', name: 'forum', component: () => import('./views/Forum.vue') },
     { path: '/post/:id', name: 'post', component: () => import('./views/Post.vue') },
     { path: '/new', name: 'new-post', component: () => import('./views/NewPost.vue') },
+    { path: '/me', name: 'me', component: () => import('./views/Profile.vue') },
   ],
   scrollBehavior(to, _from, saved) {
     if (to.hash) return { el: to.hash, behavior: 'smooth' }

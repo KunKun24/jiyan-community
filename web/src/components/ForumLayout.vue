@@ -28,11 +28,12 @@ async function onLogout() {
         <div class="top-actions">
           <template v-if="store.user">
             <RouterLink class="btn-primary" to="/new">发帖</RouterLink>
-            <div class="userbox">
-              <span class="avatar">{{ initial(store.user.username) }}</span>
+            <RouterLink class="userbox" to="/me" title="个人资料">
+              <img v-if="store.user.avatar" class="avatar-img" :src="store.user.avatar" alt="" />
+              <span v-else class="avatar">{{ initial(store.user.username) }}</span>
               <span class="uname">{{ store.user.username }}</span>
-              <button class="btn-link" type="button" @click="onLogout">退出</button>
-            </div>
+            </RouterLink>
+            <button class="btn-link" type="button" @click="onLogout">退出</button>
           </template>
           <template v-else>
             <RouterLink class="btn-ghost" to="/login">登录</RouterLink>
@@ -143,6 +144,15 @@ async function onLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: inherit;
+}
+
+.avatar-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .avatar {
