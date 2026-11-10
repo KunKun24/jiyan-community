@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { get } from '../api'
+import { get, post } from '../api'
 import { initial } from '../format'
 
 interface Profile {
@@ -14,12 +14,53 @@ interface Profile {
   website: string | null
   contact: string | null
   createdAt: string
+  points: number
+  checkinCount: number
+  likesReceived: number
+  shareCount: number
+  lastCheckinOn: string | null
+}
+
+interface Level {
+  level: number
+  name: string
+  growth: number
+  nextName: string | null
+  nextAt: number | null
+  progress: number
 }
 
 const router = useRouter()
 const profile = ref<Profile | null>(null)
 const stats = ref({ posts: 0, replies: 0 })
+const level = ref<Level | null>(null)
 const loading = ref(true)
+const checkedIn = ref(false)
+const checkinMsg = ref('')
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function daysSince(s: string) {
+  const t = new Date(s).getTime()
+  if (!t) return 0
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000))
+}
+
+async function checkin() {
+  const r = await post<{ user: Profile; level: Level; gained: number }>('/api/user/checkin', {})
+  if (!r.ok) {
+    checkinMsg.value = r.msg
+    checkedIn.value = true
+    return
+  }
+  profile.value = r.data?.user ?? profile.value
+  level.value = r.data?.level ?? level.value
+  checkedIn.value = true
+  checkinMsg.value = r.msg
+}
 
 onMounted(async () => {
   const r = await get<{ user: Profile; stats: { posts: number; replies: number } }>('/api/user/profile')
@@ -29,7 +70,9 @@ onMounted(async () => {
     return
   }
   profile.value = r.data?.user ?? null
+  level.value = (r.data as { level?: Level })?.level ?? null
   stats.value = r.data?.stats ?? { posts: 0, replies: 0 }
+  checkedIn.value = !!profile.value?.lastCheckinOn && profile.value.lastCheckinOn === todayStr()
   loading.value = false
 })
 </script>
@@ -54,6 +97,35 @@ onMounted(async () => {
 
       <RouterLink class="btn-edit" to="/settings">编辑资料</RouterLink>
     </header>
+
+    <section class="growth">
+      <div class="lv">
+        <span class="lv-badge">Lv{{ level?.level ?? 1 }}</span>
+        <strong>{{ level?.name ?? '路过' }}</strong>
+      </div>
+
+      <div class="grow-main">
+        <div class="grow-top">
+          <span>贡献值 <b>{{ profile.points }}</b></span>
+          <span v-if="level?.nextName" class="next">
+            距「{{ level.nextName }}」还差 {{ (level.nextAt ?? 0) - level.growth }}
+          </span>
+          <span v-else class="next">已到最高等级</span>
+        </div>
+        <div class="bar"><i :style="{ width: (level?.progress ?? 100) + '%' }"></i></div>
+        <div class="facts">
+          <span>注册 {{ daysSince(profile.createdAt) }} 天</span>
+          <span>签到 {{ profile.checkinCount }} 次</span>
+          <span>被赞 {{ profile.likesReceived }}</span>
+          <span>分享 {{ profile.shareCount }}</span>
+        </div>
+      </div>
+
+      <button class="checkin" type="button" :disabled="checkedIn" @click="checkin">
+        {{ checkedIn ? '今日已签到' : '签到 +3' }}
+      </button>
+    </section>
+    <p v-if="checkinMsg" class="checkin-msg">{{ checkinMsg }}</p>
 
     <section class="card">
       <h2>资料</h2>
@@ -220,7 +292,129 @@ dd a {
   text-underline-offset: 3px;
 }
 
+.growth {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  margin: 4px 0 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(38, 34, 28, 0.05);
+}
+
+.lv {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 62px;
+}
+
+.lv-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lv strong {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.grow-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.grow-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.grow-top b {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.next {
+  font-size: 12px;
+  color: #a09a8e;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #efeae1;
+  margin: 8px 0 9px;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #a09a8e;
+}
+
+.checkin {
+  flex: none;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.checkin:disabled {
+  background: #e7e2d9;
+  color: #a8a196;
+  cursor: default;
+}
+
+.checkin-msg {
+  margin: -6px 0 14px;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
 @media (max-width: 700px) {
+  .growth {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .grow-main {
+    flex-basis: 100%;
+    order: 3;
+  }
   .phead {
     gap: 14px;
   }

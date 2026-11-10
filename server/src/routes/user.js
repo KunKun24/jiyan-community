@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import { one, q } from '../db.js'
 import { sessionUser } from '../session.js'
 import { hashPassword, verifyPassword } from '../password.js'
+import { levelOf, growthOf } from '../level.js'
 
 const r = Router()
 
@@ -41,6 +42,11 @@ function profileOf(u) {
     contact: u.contact,
     role: u.role,
     createdAt: u.created_at,
+    points: Number(u.points || 0),
+    checkinCount: Number(u.checkin_count || 0),
+    likesReceived: Number(u.likes_received || 0),
+    shareCount: Number(u.share_count || 0),
+    lastCheckinOn: u.last_checkin_on || null,
   }
 }
 
@@ -56,10 +62,36 @@ r.get('/profile', auth, async (req, res) => {
     )
     return OK(res, {
       user: profileOf(u),
+      level: levelOf(growthOf(u)),
       stats: { posts: Number(stats.pc), replies: Number(stats.rc) },
     })
   } catch (e) {
     console.error('[user.profile]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 每日签到 */
+r.post('/checkin', auth, async (req, res) => {
+  try {
+    const r2 = await q(
+      `UPDATE users
+          SET checkin_count = checkin_count + 1,
+              points = points + 3,
+              last_checkin_on = CURDATE()
+        WHERE id = ? AND (last_checkin_on IS NULL OR last_checkin_on < CURDATE())`,
+      [req.uid],
+    )
+    if (!r2.affectedRows) return FAIL(res, '今天已经签过了，明天再来。')
+
+    const u = await one('SELECT * FROM users WHERE id=?', [req.uid])
+    return OK(
+      res,
+      { user: profileOf(u), level: levelOf(growthOf(u)), gained: 3 },
+      '签到成功，贡献值 +3',
+    )
+  } catch (e) {
+    console.error('[user.checkin]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })

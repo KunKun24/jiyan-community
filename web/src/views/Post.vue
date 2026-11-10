@@ -17,6 +17,8 @@ interface PostData {
   views: number
   replyCount: number
   createdAt: string
+  likeCount: number
+  liked: boolean
   author: Author
   category: { id: number; name: string; slug: string }
 }
@@ -39,6 +41,37 @@ const errorMsg = ref('')
 const replyText = ref('')
 const sending = ref(false)
 const replyError = ref('')
+const shareMsg = ref('')
+
+async function toggleLike() {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  const r = await post<{ liked: boolean; likeCount: number }>(`/api/posts/${route.params.id}/like`, {})
+  if (r.ok && data.value && r.data) {
+    data.value.liked = r.data.liked
+    data.value.likeCount = r.data.likeCount
+  } else if (!r.ok) {
+    shareMsg.value = r.msg
+    setTimeout(() => (shareMsg.value = ''), 2200)
+  }
+}
+
+async function share() {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(location.href)
+    shareMsg.value = '链接已复制'
+  } catch {
+    shareMsg.value = '复制失败，请手动复制地址栏'
+  }
+  await post(`/api/posts/${route.params.id}/share`, {})
+  setTimeout(() => (shareMsg.value = ''), 2200)
+}
 
 async function load() {
   loading.value = true
@@ -96,6 +129,34 @@ onMounted(load)
         <span>{{ data.views }} 次浏览</span>
       </div>
       <div class="post-body">{{ data.content }}</div>
+
+      <div class="post-actions">
+        <button class="act" :class="{ on: data.liked }" type="button" @click="toggleLike">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path
+              d="M12 21s-7.5-4.7-9.3-9.2C1.3 8.3 3.2 5 6.6 5c2 0 3.4 1.1 4.2 2.3l1.2 1.6 1.2-1.6C14 6.1 15.4 5 17.4 5c3.4 0 5.3 3.3 3.9 6.8C19.5 16.3 12 21 12 21z"
+              :fill="data.liked ? 'currentColor' : 'none'"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+          </svg>
+          {{ data.likeCount }}
+        </button>
+        <button class="act" type="button" @click="share">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M8 7l4-4 4 4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          分享
+        </button>
+        <span v-if="shareMsg" class="act-msg">{{ shareMsg }}</span>
+      </div>
     </article>
 
     <section class="replies">
@@ -146,6 +207,47 @@ onMounted(load)
   color: var(--muted);
   font-size: 14px;
 }
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: #6b655a;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.act:hover {
+  border-color: #d9d3c7;
+  color: var(--ink);
+}
+
+.act.on {
+  color: #b4483f;
+  border-color: #e8cfcb;
+  background: #fbf3f1;
+}
+
+.act-msg {
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
 .state.small {
   padding: 30px 0;
 }

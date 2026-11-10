@@ -174,6 +174,8 @@ r.post('/posts', async (req, res) => {
       title,
       content,
     ])
+    await q('UPDATE users SET points = points + 10 WHERE id = ?', [uid])
+
     for (const name of tags) {
       await q('INSERT INTO tags (category_id, name) VALUES (?,?) ON DUPLICATE KEY UPDATE id = id', [
         categoryId,
@@ -213,6 +215,11 @@ r.get('/posts/:id', async (req, res) => {
       [id],
     )
 
+    const viewer = sessionUser(req)?.uid || 0
+    const likedRow = viewer
+      ? await one('SELECT 1 AS x FROM post_likes WHERE user_id=? AND post_id=?', [viewer, id])
+      : null
+
     return OK(res, {
       post: {
         id: p.id,
@@ -221,6 +228,8 @@ r.get('/posts/:id', async (req, res) => {
         views: p.views + 1,
         replyCount: replies.length,
         createdAt: p.created_at,
+        likeCount: Number(p.like_count || 0),
+        liked: !!likedRow,
         author: authorOf(p),
         category: { id: p.category_id, name: p.category_name, slug: p.category_slug },
       },
@@ -253,9 +262,59 @@ r.post('/posts/:id/replies', async (req, res) => {
 
     await q('INSERT INTO replies (post_id, user_id, content) VALUES (?,?,?)', [id, uid, content])
     await q('UPDATE posts SET reply_count = reply_count + 1, last_reply_at = NOW() WHERE id = ?', [id])
+    await q('UPDATE users SET points = points + 2 WHERE id = ?', [uid])
     return OK(res, {}, '回复成功')
   } catch (e) {
     console.error('[forum.reply]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 点赞 / 取消点赞 */
+r.post('/posts/:id/like', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const id = Number(req.params.id)
+    const p = await one('SELECT id, user_id FROM posts WHERE id=?', [id])
+    if (!p) return FAIL(res, '帖子不存在', 404)
+    if (p.user_id === uid) return FAIL(res, '不能给自己点赞')
+
+    const liked = await one('SELECT 1 AS x FROM post_likes WHERE user_id=? AND post_id=?', [uid, id])
+    if (liked) {
+      await q('DELETE FROM post_likes WHERE user_id=? AND post_id=?', [uid, id])
+      await q('UPDATE posts SET like_count = GREATEST(like_count - 1, 0) WHERE id=?', [id])
+      await q('UPDATE users SET likes_received = GREATEST(likes_received - 2, 0) WHERE id=?', [p.user_id])
+    } else {
+      await q('INSERT IGNORE INTO post_likes (user_id, post_id) VALUES (?,?)', [uid, id])
+      await q('UPDATE posts SET like_count = like_count + 1 WHERE id=?', [id])
+      await q('UPDATE users SET likes_received = likes_received + 2 WHERE id=?', [p.user_id])
+    }
+    const row = await one('SELECT like_count FROM posts WHERE id=?', [id])
+    return OK(res, { liked: !liked, likeCount: Number(row.like_count) })
+  } catch (e) {
+    console.error('[forum.like]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 分享（每人每帖记一次） */
+r.post('/posts/:id/share', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const id = Number(req.params.id)
+    const p = await one('SELECT id, user_id FROM posts WHERE id=?', [id])
+    if (!p) return FAIL(res, '帖子不存在', 404)
+
+    const ins = await q('INSERT IGNORE INTO share_logs (user_id, post_id) VALUES (?,?)', [uid, id])
+    if (ins.affectedRows > 0) {
+      await q('UPDATE users SET share_count = share_count + 2 WHERE id=?', [p.user_id])
+    }
+    const row = await one('SELECT share_count FROM users WHERE id=?', [p.user_id])
+    return OK(res, { shareCount: Number(row.share_count) })
+  } catch (e) {
+    console.error('[forum.share]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })
