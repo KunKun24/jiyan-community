@@ -41,14 +41,15 @@ r.get('/categories', async (req, res) => {
   }
 })
 
-/** 帖子列表 ?category=slug&page=1&sort=new|active */
+/** 帖子列表 ?category=slug&page=1&sort=new|active|hot */
 r.get('/posts', async (req, res) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1)
     const size = Math.min(50, Math.max(1, Number(req.query.size) || 20))
     const offset = (page - 1) * size
     const category = String(req.query.category || '').trim()
-    const sort = req.query.sort === 'active' ? 'active' : 'new'
+    const sortIn = String(req.query.sort || 'new')
+    const sort = ['new', 'active', 'hot'].includes(sortIn) ? sortIn : 'new'
 
     const where = []
     const params = []
@@ -57,7 +58,12 @@ r.get('/posts', async (req, res) => {
       params.push(category)
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const orderSql = sort === 'active' ? 'p.last_reply_at DESC, p.created_at DESC' : 'p.created_at DESC'
+    const orderSql =
+      sort === 'active'
+        ? 'p.last_reply_at DESC, p.created_at DESC'
+        : sort === 'hot'
+          ? 'p.views DESC, p.reply_count DESC, p.created_at DESC'
+          : 'p.created_at DESC'
 
     const rows = await q(
       `SELECT p.id, p.title, p.content, p.views, p.reply_count, p.created_at, p.last_reply_at,

@@ -21,6 +21,16 @@ const tabs: Tab[] = [
     icon: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
   },
   {
+    path: '/hot',
+    label: '热门',
+    icon: 'M13 2 4.5 13.5H11l-1 8.5L19.5 10H13z',
+  },
+  {
+    path: '/notices',
+    label: '公告',
+    icon: 'M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1zM15 8.5a4 4 0 0 1 0 7M18 5.5a8 8 0 0 1 0 13',
+  },
+  {
     path: '/me',
     label: '个人',
     icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -32,32 +42,33 @@ const tabs: Tab[] = [
   },
 ]
 
+const mobileTabs = tabs.filter((t) => t.path !== '/settings')
+
 function isActive(path: string) {
   if (path === '/forum') return route.path === '/forum' || route.path.startsWith('/post/')
+  if (path === '/categories') return route.path === '/categories' || route.path.startsWith('/c/')
   return route.path === path
 }
 </script>
 
 <template>
-  <!-- 顶部：平板 / 电脑 -->
-  <nav class="tabs-top" aria-label="主导航">
-    <div class="tabs-inner">
-      <RouterLink
-        v-for="t in tabs"
-        :key="t.path"
-        :to="t.path"
-        class="tab"
-        :class="{ active: isActive(t.path) }"
-      >
-        <span>{{ t.label }}</span>
-      </RouterLink>
-    </div>
-  </nav>
-
-  <!-- 底部：手机 -->
-  <nav class="tabs-bottom" aria-label="主导航">
+  <!-- 桌面内联：放进标题栏 -->
+  <nav class="tabs-inline" aria-label="主导航">
     <RouterLink
       v-for="t in tabs"
+      :key="t.path"
+      :to="t.path"
+      class="tab"
+      :class="{ active: isActive(t.path) }"
+    >
+      <span>{{ t.label }}</span>
+    </RouterLink>
+  </nav>
+
+  <!-- 手机底部 -->
+  <nav class="tabs-bottom" aria-label="主导航">
+    <RouterLink
+      v-for="t in mobileTabs"
       :key="t.path"
       :to="t.path"
       class="btab"
@@ -72,33 +83,24 @@ function isActive(path: string) {
 </template>
 
 <style scoped>
-.tabs-top {
-  position: sticky;
-  top: 62px;
-  z-index: 19;
-  background: rgba(247, 245, 241, 0.9);
-  backdrop-filter: saturate(180%) blur(14px);
-  border-bottom: 1px solid var(--line);
-}
-
-.tabs-inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 0 22px;
+.tabs-inline {
+  flex: 1;
   display: flex;
-  gap: 4px;
+  justify-content: center;
+  min-width: 0;
 }
 
 .tab {
   position: relative;
-  height: 46px;
-  padding: 0 14px;
+  height: 62px;
+  padding: 0 15px;
   display: inline-flex;
   align-items: center;
   font-size: 14px;
   font-weight: 500;
   color: var(--muted);
   transition: color 0.18s ease;
+  white-space: nowrap;
 }
 
 .tab:hover {
@@ -113,8 +115,8 @@ function isActive(path: string) {
 .tab::after {
   content: '';
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 13px;
+  right: 13px;
   bottom: 0;
   height: 2px;
   border-radius: 2px;
@@ -133,7 +135,7 @@ function isActive(path: string) {
 }
 
 @media (max-width: 700px) {
-  .tabs-top {
+  .tabs-inline {
     display: none;
   }
 

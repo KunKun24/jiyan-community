@@ -14,6 +14,8 @@ export default createRouter({
       children: [
         { path: 'forum', name: 'forum', component: () => import('./views/Forum.vue') },
         { path: 'categories', name: 'categories', component: () => import('./views/Categories.vue') },
+        { path: 'hot', name: 'hot', component: () => import('./views/Hot.vue') },
+        { path: 'notices', name: 'notices', component: () => import('./views/Notices.vue') },
         { path: 'post/:id', name: 'post', component: () => import('./views/Post.vue') },
         { path: 'new', name: 'new-post', component: () => import('./views/NewPost.vue') },
         { path: 'me', name: 'me', component: () => import('./views/Profile.vue') },

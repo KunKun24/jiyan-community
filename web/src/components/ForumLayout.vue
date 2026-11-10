@@ -21,6 +21,8 @@ async function onLogout() {
           <span>极验社区</span>
         </RouterLink>
 
+        <AppTabs />
+
         <div class="top-actions">
           <template v-if="store.user">
             <RouterLink class="btn-primary" to="/new">发帖</RouterLink>
@@ -38,8 +40,6 @@ async function onLogout() {
         </div>
       </div>
     </header>
-
-    <AppTabs />
 
     <main class="shell-main">
       <RouterView v-slot="{ Component, route }">
