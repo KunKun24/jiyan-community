@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { get, post } from '../api'
 import { initial, timeAgo } from '../format'
@@ -43,6 +43,35 @@ const sending = ref(false)
 const replyError = ref('')
 const shareMsg = ref('')
 
+const isOwn = computed(() => !!store.user && !!data.value && store.user.id === data.value.author.id)
+
+function copyText(text: string): boolean {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* 继续走兼容方案 */
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'fixed'
+  ta.style.top = '-1000px'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  document.body.removeChild(ta)
+  return ok
+}
+
 async function toggleLike() {
   if (!store.user) {
     router.push('/login')
@@ -63,12 +92,7 @@ async function share() {
     router.push('/login')
     return
   }
-  try {
-    await navigator.clipboard.writeText(location.href)
-    shareMsg.value = '链接已复制'
-  } catch {
-    shareMsg.value = '复制失败，请手动复制地址栏'
-  }
+  shareMsg.value = copyText(location.href) ? '链接已复制' : '复制失败，请手动复制地址栏'
   await post(`/api/posts/${route.params.id}/share`, {})
   setTimeout(() => (shareMsg.value = ''), 2200)
 }
@@ -131,7 +155,14 @@ onMounted(load)
       <div class="post-body">{{ data.content }}</div>
 
       <div class="post-actions">
-        <button class="act" :class="{ on: data.liked }" type="button" @click="toggleLike">
+        <button
+          class="act"
+          :class="{ on: data.liked }"
+          type="button"
+          :disabled="isOwn"
+          :title="isOwn ? '不能给自己的帖子点赞' : ''"
+          @click="toggleLike"
+        >
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
             <path
               d="M12 21s-7.5-4.7-9.3-9.2C1.3 8.3 3.2 5 6.6 5c2 0 3.4 1.1 4.2 2.3l1.2 1.6 1.2-1.6C14 6.1 15.4 5 17.4 5c3.4 0 5.3 3.3 3.9 6.8C19.5 16.3 12 21 12 21z"
@@ -235,6 +266,11 @@ onMounted(load)
 .act:hover {
   border-color: #d9d3c7;
   color: var(--ink);
+}
+
+.act:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .act.on {
