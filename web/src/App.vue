@@ -7,6 +7,32 @@ interface Feature {
   path: string
 }
 
+interface Contact {
+  title: string
+  desc: string
+  href: string
+  label: string
+  path: string
+}
+
+interface Faq {
+  q: string
+  a: string
+}
+
+const links = {
+  github: 'https://github.com/KunKun24/jiyan-community',
+  // TODO: 换成真实的 Telegram 频道 / 群链接
+  telegramChannel: 'https://t.me/',
+  telegramGroup: 'https://t.me/',
+}
+
+const stats = [
+  { n: '1', label: '个社区' },
+  { n: '0', label: '条广告' },
+  { n: '100%', label: '开源' },
+]
+
 const features: Feature[] = [
   {
     title: '干净的界面',
@@ -27,6 +53,56 @@ const features: Feature[] = [
     title: '数据在你自己手里',
     desc: '自己的服务器，自己的数据库与备份。想改什么，就改什么。',
     path: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  },
+]
+
+const contacts: Contact[] = [
+  {
+    title: 'GitHub 仓库',
+    desc: '源码、提交记录与版本更新。',
+    href: links.github,
+    label: '查看仓库 →',
+    path: 'M9 8 4 12l5 4M15 8l5 4-5 4',
+  },
+  {
+    title: 'Telegram 频道',
+    desc: '公告、更新和发布通知。',
+    href: links.telegramChannel,
+    label: '关注频道 →',
+    path: 'M3 11l18-8-8 18-2-7-8-3z',
+  },
+  {
+    title: 'Telegram 群',
+    desc: '和其他人即时聊天。',
+    href: links.telegramGroup,
+    label: '加入群组 →',
+    path: 'M4 5h16v11H9l-5 4z',
+  },
+  {
+    title: '问题反馈',
+    desc: '发现 bug 或想提建议，开一个 issue。',
+    href: links.github + '/issues',
+    label: '提交 issue →',
+    path: 'M12 3l9 16H3zM12 9v5M12 17h.01',
+  },
+]
+
+const faqs: Faq[] = [
+  {
+    q: '极验社区是什么？',
+    a: '一个自建的、专注讨论的社区。没有推荐算法，没有无限滚动，只有板块、帖子和回复。',
+  },
+  {
+    q: '为什么要自己写一个？',
+    a: '现成的论坛系统要么太重，要么界面改不动。我们想要一个干净、轻、完全能自己掌控的实现。',
+  },
+  {
+    q: '会一直开源吗？',
+    a: '会。源码放在 GitHub，MIT 协议，任何人都可以自己部署一份。',
+  },
+  {
+    q: '现在能注册吗？',
+    a: '还在搭建中。注册和发帖会陆续开放，可以先去 GitHub 或 Telegram 关注进度。',
   },
 ]
 
@@ -56,13 +132,14 @@ onMounted(() => {
     <header class="nav">
       <div class="nav-inner">
         <a class="brand" href="/">
-          <span class="brand-mark">极</span>
+          <img class="brand-logo" src="/logo.svg" alt="极验社区" />
           <span>极验社区</span>
         </a>
         <nav class="nav-links">
           <a href="#features">功能</a>
           <a href="#about">关于</a>
-          <a href="#join">加入</a>
+          <a href="#contact">联系</a>
+          <a href="#faq">常见问题</a>
         </nav>
         <div class="nav-actions">
           <a class="link" href="#join">登录</a>
@@ -93,7 +170,7 @@ onMounted(() => {
           </div>
           <div class="browser-body">
             <div class="mock-head">
-              <span class="mock-logo">极</span>
+              <img class="mock-logo" src="/logo.svg" alt="" />
               <span class="mock-name">极验社区</span>
               <span class="mock-search">搜索讨论…</span>
             </div>
@@ -123,6 +200,15 @@ onMounted(() => {
                 <span class="mock-tag">21 回复</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats">
+        <div class="stats-inner">
+          <div v-for="s in stats" :key="s.label" class="stat reveal">
+            <b>{{ s.n }}</b>
+            <span>{{ s.label }}</span>
           </div>
         </div>
       </section>
@@ -162,6 +248,53 @@ onMounted(() => {
         <a class="btn btn-light btn-lg reveal" href="#join">进入社区</a>
       </section>
 
+      <section id="contact" class="contact">
+        <div class="section-head reveal">
+          <p class="eyebrow">保持联系</p>
+          <h2>社区之外，<br />也能找到我们。</h2>
+        </div>
+        <div class="contact-grid">
+          <a
+            v-for="c in contacts"
+            :key="c.title"
+            class="contact-card reveal"
+            :href="c.href"
+            target="_blank"
+            rel="noopener"
+          >
+            <div class="contact-icon">
+              <svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path :d="c.path" />
+              </svg>
+            </div>
+            <h3>{{ c.title }}</h3>
+            <p>{{ c.desc }}</p>
+            <span class="go">{{ c.label }}</span>
+          </a>
+        </div>
+      </section>
+
+      <section id="faq" class="faq">
+        <div class="section-head reveal">
+          <p class="eyebrow">常见问题</p>
+          <h2>你可能想问。</h2>
+        </div>
+        <div class="faq-list reveal">
+          <details v-for="f in faqs" :key="f.q" class="faq-item">
+            <summary>{{ f.q }}</summary>
+            <p>{{ f.a }}</p>
+          </details>
+        </div>
+      </section>
+
       <section id="join" class="cta">
         <h2 class="reveal">现在，开始说话。</h2>
         <p class="reveal">注册只需要一个邮箱。没有问卷，没有等待。</p>
@@ -171,9 +304,32 @@ onMounted(() => {
 
     <footer class="footer">
       <div class="footer-inner">
-        <span class="footer-brand">极验社区</span>
-        <span>© 2026 极验社区 · 保留所有权利</span>
+        <div class="footer-brand-col">
+          <div class="brand">
+            <img class="brand-logo" src="/logo.svg" alt="极验社区" />
+            <span>极验社区</span>
+          </div>
+          <p>一个干净、专注内容的开源社区。</p>
+        </div>
+        <div class="footer-col">
+          <h4>社区</h4>
+          <a href="#features">功能</a>
+          <a href="#faq">常见问题</a>
+          <a href="#join">加入</a>
+        </div>
+        <div class="footer-col">
+          <h4>联系</h4>
+          <a :href="links.github" target="_blank" rel="noopener">GitHub</a>
+          <a :href="links.telegramChannel" target="_blank" rel="noopener">Telegram 频道</a>
+          <a :href="links.telegramGroup" target="_blank" rel="noopener">Telegram 群</a>
+        </div>
+        <div class="footer-col">
+          <h4>其他</h4>
+          <a :href="links.github + '/blob/main/LICENSE'" target="_blank" rel="noopener">MIT 协议</a>
+          <a :href="links.github" target="_blank" rel="noopener">源码</a>
+        </div>
       </div>
+      <div class="footer-bottom">© 2026 极验社区 · 保留所有权利</div>
     </footer>
   </div>
 </template>
@@ -210,20 +366,15 @@ onMounted(() => {
   font-size: 15px;
   letter-spacing: 0.01em;
 }
-.brand-mark {
+.brand-logo {
   width: 24px;
   height: 24px;
   border-radius: 7px;
-  background: var(--ink);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
+  flex: none;
 }
 .nav-links {
   display: flex;
-  gap: 28px;
+  gap: 26px;
   font-size: 14px;
   color: var(--muted);
 }
@@ -335,7 +486,7 @@ onMounted(() => {
 .showcase {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 0 24px 140px;
+  padding: 0 24px 110px;
 }
 .browser {
   background: var(--surface);
@@ -379,12 +530,7 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: var(--ink);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 700;
+  flex: none;
 }
 .mock-name {
   font-size: 13.5px;
@@ -449,15 +595,42 @@ onMounted(() => {
   border-radius: 6px;
 }
 
+/* ---------- 数字 ---------- */
+.stats {
+  border-top: 1px solid rgba(22, 21, 15, 0.08);
+  border-bottom: 1px solid rgba(22, 21, 15, 0.08);
+}
+.stats-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 44px 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.stat {
+  text-align: center;
+}
+.stat b {
+  display: block;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.stat span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* ---------- 特性 ---------- */
 .features {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 0 24px 140px;
+  padding: 130px 24px;
 }
 .section-head {
   text-align: center;
-  margin-bottom: 72px;
+  margin-bottom: 64px;
 }
 .section-head h2 {
   margin: 0;
@@ -477,7 +650,8 @@ onMounted(() => {
   border-radius: 18px;
   padding: 26px 22px 28px;
 }
-.feature-icon {
+.feature-icon,
+.contact-icon {
   width: 38px;
   height: 38px;
   border-radius: 11px;
@@ -491,6 +665,7 @@ onMounted(() => {
   width: 19px;
   height: 19px;
 }
+.feature h2,
 .feature h3 {
   margin: 0 0 8px;
   font-size: 16px;
@@ -527,9 +702,98 @@ onMounted(() => {
   line-height: 1.65;
 }
 
+/* ---------- 联系 ---------- */
+.contact {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 130px 24px;
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.contact-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px 22px;
+  transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
+}
+.contact-card:hover {
+  transform: translateY(-2px);
+  border-color: #d9d2c6;
+  box-shadow: 0 18px 40px -22px rgba(22, 21, 15, 0.2);
+}
+.contact-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.contact-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.contact-card .go {
+  margin-top: 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ---------- FAQ ---------- */
+.faq {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 24px 130px;
+}
+.faq-list {
+  border-top: 1px solid var(--line);
+}
+.faq-item {
+  border-bottom: 1px solid var(--line);
+  padding: 22px 2px;
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary::after {
+  content: '+';
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+.faq-item[open] summary::after {
+  content: '−';
+}
+.faq-item p {
+  max-width: 720px;
+  margin: 14px 0 0;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
 /* ---------- 结尾 CTA ---------- */
 .cta {
-  padding: 150px 24px;
+  padding: 130px 24px 150px;
   text-align: center;
 }
 .cta h2 {
@@ -547,22 +811,54 @@ onMounted(() => {
 /* ---------- 页脚 ---------- */
 .footer {
   border-top: 1px solid rgba(22, 21, 15, 0.08);
-  padding: 44px 24px 52px;
+  padding: 64px 24px 32px;
 }
 .footer-inner {
   max-width: 1080px;
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 12.5px;
-  color: #9a958c;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
 }
-.footer-brand {
-  font-size: 13.5px;
+.footer-brand-col .brand {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.footer-brand-col p {
+  margin: 0;
+  max-width: 260px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.footer-col h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a29c92;
+}
+.footer-col a {
+  font-size: 13.5px;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+.footer-col a:hover {
   color: var(--ink);
+}
+.footer-bottom {
+  max-width: 1080px;
+  margin: 44px auto 0;
+  padding-top: 22px;
+  border-top: 1px solid rgba(22, 21, 15, 0.06);
+  font-size: 12px;
+  color: #a29c92;
 }
 
 /* ---------- 滚动淡入 ---------- */
@@ -586,11 +882,15 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
-  .feature-grid {
+  .feature-grid,
+  .contact-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .nav-links {
     display: none;
+  }
+  .footer-inner {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -598,15 +898,19 @@ onMounted(() => {
   .hero {
     padding-top: 96px;
   }
-  .feature-grid {
+  .feature-grid,
+  .contact-grid {
     grid-template-columns: 1fr;
+  }
+  .stats-inner {
+    padding: 34px 24px;
   }
   .nav-actions .link {
     display: none;
   }
   .footer-inner {
-    flex-direction: column;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    gap: 28px;
   }
 }
 </style>
