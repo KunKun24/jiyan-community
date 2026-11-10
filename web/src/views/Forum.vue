@@ -237,29 +237,9 @@ watch(
   color: #c9c3b7;
 }
 
-@media (max-width: 860px) {
-  .forum {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-  .side {
-    position: static;
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 8px;
-    padding-bottom: 4px;
-  }
-  .side-title {
-    display: none;
-  }
-  .side-item {
-    flex: none;
-    gap: 8px;
-    border: 1px solid var(--line);
-    background: #fff;
-  }
-  .side-item em {
-    font-size: 12px;
+@media (max-width: 700px) {
+  .chips {
+    padding-bottom: 14px;
   }
 }
 </style>
