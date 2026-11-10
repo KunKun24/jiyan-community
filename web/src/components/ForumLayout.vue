@@ -1,10 +1,26 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppTabs from './AppTabs.vue'
 import { store, logout } from '../store'
 import { initial } from '../format'
+import { get } from '../api'
 
 const router = useRouter()
+const route = useRoute()
+const unread = ref(0)
+
+async function loadUnread() {
+  if (!store.user) {
+    unread.value = 0
+    return
+  }
+  const r = await get<{ unread: number }>('/api/notifications/count')
+  if (r.ok) unread.value = r.data?.unread || 0
+}
+
+onMounted(loadUnread)
+watch(() => route.fullPath, loadUnread)
 
 async function onLogout() {
   await logout()
@@ -24,7 +40,19 @@ async function onLogout() {
         <AppTabs />
 
         <div class="top-actions">
+          <RouterLink class="icon-btn" to="/search" title="搜索" aria-label="搜索">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" />
+            </svg>
+          </RouterLink>
           <template v-if="store.user">
+            <RouterLink class="icon-btn" to="/notifications" title="消息" aria-label="消息">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7">
+                <path d="M12 3a6 6 0 0 0-6 6v4l-1.5 3h15L18 13V9a6 6 0 0 0-6-6Z" />
+                <path d="M10 19a2 2 0 0 0 4 0" />
+              </svg>
+              <i v-if="unread" class="badge-dot">{{ unread > 99 ? '99+' : unread }}</i>
+            </RouterLink>
             <RouterLink class="btn-primary" to="/new">发帖</RouterLink>
             <RouterLink class="userbox" to="/me" title="个人资料">
               <img v-if="store.user.avatar" class="avatar-img" :src="store.user.avatar" alt="" />
@@ -52,6 +80,34 @@ async function onLogout() {
 </template>
 
 <style scoped>
+.icon-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #7c7469;
+}
+.icon-btn:hover {
+  background: #f1ede5;
+  color: var(--ink);
+}
+.badge-dot {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #b4483f;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+  text-align: center;
+}
 .shell {
   min-height: 100vh;
   display: flex;

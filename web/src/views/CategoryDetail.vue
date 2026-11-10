@@ -27,7 +27,7 @@ interface PostItem {
   replyCount: number
   createdAt: string
   tags: string | null
-  author: { username: string }
+  author: { id: number; username: string }
 }
 
 const route = useRoute()
@@ -128,7 +128,7 @@ watch(slug, async () => {
         <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
         <div class="row-meta">
           <span v-for="name in (p.tags || '').split(',').filter(Boolean)" :key="name" class="tag">{{ name }}</span>
-          <span>{{ p.author.username }}</span>
+          <RouterLink class="author-name" :to="`/u/${p.author.id}`">{{ p.author.username }}</RouterLink>
           <span>{{ timeAgo(p.createdAt) }}</span>
           <span class="dot">·</span>
           <span>{{ p.replyCount }} 回复</span>
@@ -141,6 +141,8 @@ watch(slug, async () => {
 </template>
 
 <style scoped>
+.author-name { color: #a8a196; }
+.author-name:hover { color: var(--accent); }
 .head {
   padding: 2px 0 18px;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { del, get, post } from '../api'
 import { initial, timeAgo } from '../format'
@@ -33,7 +33,14 @@ interface Reply {
   createdAt: string
   parentId: number | null
   parentUsername: string | null
+  likeCount: number
+  liked: boolean
   author: Author
+}
+
+interface Lightbox {
+  srcs: string[]
+  idx: number
 }
 
 const route = useRoute()
@@ -43,16 +50,145 @@ function escapeHtml(t: string) {
   return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+const MENTION_RE = /@([\p{L}\p{N}_-]{2,32})/gu
+
+/** 把正文里的 @用户名 变成可点的链接 */
+function linkMentions(html: string) {
+  if (!/@[\p{L}\p{N}_-]{2,32}/u.test(html)) return html
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text)
+  for (const node of nodes) {
+    const parent = node.parentElement
+    if (!parent || parent.closest('a, code, pre')) continue
+    const text = node.nodeValue || ''
+    if (!MENTION_RE.test(text)) continue
+    MENTION_RE.lastIndex = 0
+    const frag = document.createDocumentFragment()
+    let last = 0
+    let m: RegExpExecArray | null
+    while ((m = MENTION_RE.exec(text))) {
+      frag.appendChild(doc.createTextNode(text.slice(last, m.index)))
+      const a = doc.createElement('a')
+      a.href = `/search?q=${encodeURIComponent(m[1])}&type=users`
+      a.className = 'mention-link'
+      a.textContent = '@' + m[1]
+      frag.appendChild(a)
+      last = m.index + m[0].length
+    }
+    frag.appendChild(doc.createTextNode(text.slice(last)))
+    node.replaceWith(frag)
+  }
+  return doc.body.innerHTML
+}
+
 const bodyHtml = computed(() => {
   if (!data.value) return ''
-  if (data.value.contentHtml) return decorateHtml(data.value.contentHtml)
-  return escapeHtml(data.value.content || '').replace(/\n/g, '<br />')
+  const raw = data.value.contentHtml
+    ? decorateHtml(data.value.contentHtml)
+    : escapeHtml(data.value.content || '').replace(/\n/g, '<br />')
+  return linkMentions(raw)
 })
+
+const lightbox = ref<Lightbox | null>(null)
 
 function onBodyClick(e: MouseEvent) {
   const t = e.target as HTMLElement
-  if (t.tagName === 'IMG' && t.classList.contains('img-spoiler')) {
-    t.classList.remove('img-spoiler')
+  if (t.tagName !== 'IMG') return
+  const img = t as HTMLImageElement
+  if (img.classList.contains('img-spoiler')) {
+    img.classList.remove('img-spoiler')
+    return
+  }
+  const imgs = [...document.querySelectorAll('.post-body img')].filter(
+    (x) => !x.classList.contains('img-spoiler'),
+  ) as HTMLImageElement[]
+  const srcs = imgs.map((x) => x.src)
+  if (!srcs.length) return
+  lightbox.value = { srcs, idx: Math.max(0, srcs.indexOf(img.src)) }
+}
+
+function lbStep(d: number) {
+  if (!lightbox.value) return
+  const n = lightbox.value.srcs.length
+  lightbox.value.idx = (lightbox.value.idx + d + n) % n
+}
+
+function onKey(e: KeyboardEvent) {
+  if (!lightbox.value) return
+  if (e.key === 'Escape') lightbox.value = null
+  if (e.key === 'ArrowLeft') lbStep(-1)
+  if (e.key === 'ArrowRight') lbStep(1)
+}
+
+const reportOpen = ref(false)
+const reportType = ref<'post' | 'comment'>('post')
+const reportIds = ref<number[]>([])
+const reportReason = ref('')
+const reportContact = ref('')
+const reportError = ref('')
+const reportSending = ref(false)
+const checkedReplies = ref<number[]>([])
+const reportDone = ref('')
+
+function openReport(type: 'post' | 'comment', ids: number[]) {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  reportType.value = type
+  reportIds.value = ids
+  reportReason.value = ''
+  reportContact.value = ''
+  reportError.value = ''
+  reportDone.value = ''
+  reportOpen.value = true
+}
+
+function toggleCheck(id: number) {
+  const i = checkedReplies.value.indexOf(id)
+  if (i >= 0) checkedReplies.value.splice(i, 1)
+  else checkedReplies.value.push(id)
+}
+
+async function submitReport() {
+  reportError.value = ''
+  if (reportReason.value.trim().length < 5) {
+    reportError.value = '请把原因写清楚一点（至少 5 个字）'
+    return
+  }
+  reportSending.value = true
+  const r = await post<{ count: number }>('/api/reports', {
+    targetType: reportType.value,
+    targetIds: reportIds.value,
+    postId: data.value?.id,
+    reason: reportReason.value.trim(),
+    contact: reportContact.value.trim(),
+  })
+  reportSending.value = false
+  if (!r.ok) {
+    reportError.value = r.msg
+    return
+  }
+  reportDone.value = '已收到，管理员会看。谢谢你把它指出来。'
+  checkedReplies.value = []
+  setTimeout(() => {
+    reportOpen.value = false
+    reportDone.value = ''
+  }, 1400)
+}
+
+async function toggleReplyLike(rp: Reply) {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  if (rp.author.id === store.user.id) return
+  const r = await post<{ liked: boolean; likeCount: number }>(`/api/replies/${rp.id}/like`, {})
+  if (r.ok && r.data) {
+    rp.liked = r.data.liked
+    rp.likeCount = r.data.likeCount
   }
 }
 
@@ -217,8 +353,10 @@ onMounted(load)
     <article class="post">
       <h1 class="post-title">{{ data.title }}</h1>
       <div class="post-meta">
-        <span class="avatar">{{ initial(data.author.username) }}</span>
-        <span>{{ data.author.username }}</span>
+        <RouterLink class="author-link" :to="`/u/${data.author.id}`">
+          <span class="avatar">{{ initial(data.author.username) }}</span>
+          <span>{{ data.author.username }}</span>
+        </RouterLink>
         <span class="dot">·</span>
         <span>{{ timeAgo(data.createdAt) }}</span>
         <span class="dot">·</span>
@@ -275,6 +413,8 @@ onMounted(load)
           </svg>
           {{ data.bookmarked ? '已收藏' : '收藏' }}
         </button>
+        <RouterLink v-if="isOwn" class="act" :to="`/post/${data.id}/edit`">编辑</RouterLink>
+        <button v-if="!isOwn" class="act" type="button" @click="openReport('post', [data.id])">举报</button>
         <button v-if="isOwn" class="act danger" type="button" @click="showDelete = true">删除</button>
         <span v-if="shareMsg" class="act-msg">{{ shareMsg }}</span>
       </div>
@@ -285,18 +425,47 @@ onMounted(load)
 
       <div v-if="!replies.length" class="state small">还没有人回复，说点什么吧。</div>
 
-      <article v-for="(rp, i) in replies" :key="rp.id" class="reply">
+      <article v-for="(rp, i) in replies" :id="'r' + rp.id" :key="rp.id" class="reply">
+        <label v-if="store.user" class="reply-check">
+          <input type="checkbox" :checked="checkedReplies.includes(rp.id)" @change="toggleCheck(rp.id)" />
+        </label>
         <div class="reply-head">
-          <span class="avatar sm">{{ initial(rp.author.username) }}</span>
-          <span class="reply-name">{{ rp.author.username }}</span>
+          <RouterLink class="author-link" :to="`/u/${rp.author.id}`">
+            <span class="avatar sm">{{ initial(rp.author.username) }}</span>
+            <span class="reply-name">{{ rp.author.username }}</span>
+          </RouterLink>
           <span class="reply-floor">#{{ i + 1 }}</span>
           <span class="reply-time">{{ timeAgo(rp.createdAt) }}</span>
           <button class="reply-btn" type="button" @click="startReply(rp)">回复</button>
+          <button
+            class="reply-like"
+            :class="{ on: rp.liked }"
+            type="button"
+            :disabled="store.user?.id === rp.author.id"
+            @click="toggleReplyLike(rp)"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <path
+                d="M12 21s-7.5-4.7-9.3-9.2C1.3 8.3 3.2 5 6.6 5c2 0 3.4 1.1 4.2 2.3l1.2 1.6 1.2-1.6C14 6.1 15.4 5 17.4 5c3.4 0 5.3 3.3 3.9 6.8C19.5 16.3 12 21 12 21z"
+                :fill="rp.liked ? 'currentColor' : 'none'"
+                stroke="currentColor"
+                stroke-width="1.6"
+              />
+            </svg>
+            {{ rp.likeCount || '' }}
+          </button>
+          <button v-if="store.user && store.user.id !== rp.author.id" class="reply-btn" type="button" @click="openReport('comment', [rp.id])">举报</button>
         </div>
         <div class="reply-body">
           <span v-if="rp.parentUsername" class="reply-at">回复 @{{ rp.parentUsername }}：</span>{{ rp.content }}
         </div>
       </article>
+
+      <div v-if="checkedReplies.length" class="bulk-bar">
+        <span>已选 {{ checkedReplies.length }} 条评论</span>
+        <button type="button" @click="openReport('comment', checkedReplies)">举报给管理员</button>
+        <button type="button" class="ghost" @click="checkedReplies = []">取消</button>
+      </div>
 
       <div class="reply-box">
         <template v-if="store.user">
@@ -326,6 +495,31 @@ onMounted(load)
         </template>
       </div>
     </section>
+
+    <div v-if="lightbox" class="lb" @click.self="lightbox = null">
+      <button class="lb-close" type="button" @click="lightbox = null">×</button>
+      <button v-if="lightbox.srcs.length > 1" class="lb-nav prev" type="button" @click.stop="lbStep(-1)">‹</button>
+      <img class="lb-img" :src="lightbox.srcs[lightbox.idx]" alt="" />
+      <button v-if="lightbox.srcs.length > 1" class="lb-nav next" type="button" @click.stop="lbStep(1)">›</button>
+      <span class="lb-count">{{ lightbox.idx + 1 }} / {{ lightbox.srcs.length }}</span>
+    </div>
+
+    <div v-if="reportOpen" class="modal-mask" @click.self="reportOpen = false">
+      <div class="modal">
+        <h3>举报{{ reportType === 'post' ? '帖子' : ` ${reportIds.length} 条评论` }}</h3>
+        <p class="report-tip">管理员会看到原因和联系方式，不会告诉对方是谁举报的。</p>
+        <textarea v-model="reportReason" class="report-input" rows="4" maxlength="500" placeholder="发生了什么？写清楚一点，比如：广告、人身攻击、灌水…"></textarea>
+        <input v-model="reportContact" class="report-input one" maxlength="120" placeholder="联系方式（选填，方便管理员找你核实）" />
+        <p v-if="reportError" class="report-err">{{ reportError }}</p>
+        <p v-if="reportDone" class="report-done">{{ reportDone }}</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" type="button" @click="reportOpen = false">取消</button>
+          <button class="btn-danger" type="button" :disabled="reportSending" @click="submitReport">
+            {{ reportSending ? '提交中…' : '提交举报' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="showDelete" class="modal-mask" @click.self="showDelete = false">
       <div class="modal">
@@ -399,6 +593,51 @@ onMounted(load)
   background: #fbf3f1;
 }
 
+.author-link { display: inline-flex; align-items: center; gap: 7px; color: inherit; }
+.author-link:hover { color: var(--accent); }
+.reply-check { float: left; margin: 2px 8px 0 0; }
+.reply-like {
+  display: inline-flex; align-items: center; gap: 3px; border: 0; background: transparent;
+  color: #a8a196; font: inherit; font-size: 12px; cursor: pointer; padding: 0 2px;
+}
+.reply-like.on { color: #b4483f; }
+.reply-like:disabled { opacity: 0.4; cursor: default; }
+.bulk-bar {
+  position: sticky; bottom: 12px; z-index: 20; display: flex; align-items: center; gap: 10px;
+  margin: 14px 0 0; padding: 10px 13px; border-radius: 11px;
+  background: #26221c; color: #fff; font-size: 13px;
+  box-shadow: 0 10px 26px rgba(30, 26, 20, 0.24);
+}
+.bulk-bar button {
+  border: 0; background: rgba(255, 255, 255, 0.16); color: #fff; height: 28px;
+  padding: 0 11px; border-radius: 6px; font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.bulk-bar button.ghost { background: transparent; color: #cfc8bb; }
+.lb {
+  position: fixed; inset: 0; z-index: 80; background: rgba(18, 16, 12, 0.9);
+  display: grid; place-items: center; padding: 40px;
+}
+.lb-img { max-width: 92vw; max-height: 86vh; object-fit: contain; border-radius: 6px; }
+.lb-close {
+  position: absolute; top: 14px; right: 18px; border: 0; background: transparent;
+  color: #e8e2d6; font-size: 30px; line-height: 1; cursor: pointer;
+}
+.lb-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px;
+  border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.14); color: #fff;
+  font-size: 26px; line-height: 1; cursor: pointer;
+}
+.lb-nav.prev { left: 18px; }
+.lb-nav.next { right: 18px; }
+.lb-count { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: #cfc8bb; font-size: 12px; }
+.report-tip { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
+.report-input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 11px; font: inherit; font-size: 13px; outline: 0; resize: vertical;
+}
+.report-input.one { margin-top: 9px; height: 36px; resize: none; }
+.report-err { color: #b4432f; font-size: 12.5px; }
+.report-done { color: #3e5c4b; font-size: 12.5px; }
 .modal-mask {
   position: fixed;
   inset: 0;
@@ -666,6 +905,21 @@ onMounted(load)
   .reply-body {
     padding-left: 0;
   }
+}
+.post-body :deep(img[src^="/emoji/"]) {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin: 0 1px;
+  vertical-align: -4px;
+  border-radius: 0;
+}
+.post-body :deep(.mention-link) {
+  color: #3b5bdb;
+  background: #eef1fc;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-weight: 500;
 }
 .post-body :deep(img) {
   max-width: 100%;

@@ -11,7 +11,7 @@ interface PostItem {
   imageCount?: number
   replyCount: number
   createdAt: string
-  author: { username: string }
+  author: { id: number; username: string }
   category: { name: string }
 }
 
@@ -46,7 +46,7 @@ onMounted(async () => {
           <RouterLink class="title" :to="`/post/${p.id}`">{{ p.title }}</RouterLink>
           <p class="meta">
             <span class="tag">{{ p.category.name }}</span>
-            {{ p.author.username }} · {{ timeAgo(p.createdAt) }}
+            <RouterLink class="author-name" :to="`/u/${p.author.id}`">{{ p.author.username }}</RouterLink> · {{ timeAgo(p.createdAt) }}
           </p>
         </div>
         <span class="views"><svg class="eye" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>{{ fmtNum(p.views) }}</span>
@@ -56,6 +56,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.author-name { color: inherit; }
+.author-name:hover { color: var(--accent); }
 .head {
   padding: 2px 0 22px;
 }

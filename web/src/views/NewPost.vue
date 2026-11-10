@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { get, post } from '../api'
 import RichEditor from '../components/RichEditor.vue'
@@ -29,8 +29,28 @@ function onDocClick(e: MouseEvent) {
   if (catWrap.value && !catWrap.value.contains(e.target as Node)) catOpen.value = false
 }
 
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('beforeunload', saveDraft)
+})
 const sending = ref(false)
+const draftKey = 'shequ:draft:new'
+const draftTip = ref('')
+
+function saveDraft() {
+  try {
+    localStorage.setItem(draftKey, JSON.stringify({
+      title: form.title, content: form.content, contentHtml: form.contentHtml,
+      categoryId: form.categoryId, tags: form.tags, at: Date.now(),
+    }))
+  } catch { /* 忽略 */ }
+}
+
+function clearDraft() {
+  localStorage.removeItem(draftKey)
+}
+
+watch(form, saveDraft, { deep: true })
 
 onMounted(async () => {
   const r = await get<{ categories: Category[] }>('/api/categories')
@@ -41,6 +61,21 @@ onMounted(async () => {
     }
   }
   document.addEventListener('click', onDocClick)
+  const raw = localStorage.getItem(draftKey)
+  if (raw) {
+    try {
+      const d = JSON.parse(raw)
+      if (d.title || d.contentHtml) {
+        form.title = d.title || ''
+        form.content = d.content || ''
+        form.contentHtml = d.contentHtml || ''
+        form.tags = d.tags || ''
+        if (d.categoryId) form.categoryId = d.categoryId
+        draftTip.value = '已恢复上次没发出去的草稿'
+      }
+    } catch { /* 忽略 */ }
+  }
+  window.addEventListener('beforeunload', saveDraft)
 })
 
 async function submit() {
@@ -75,6 +110,7 @@ async function submit() {
     error.value = r.msg
     return
   }
+  clearDraft()
   router.push(`/post/${r.data?.id}`)
 }
 </script>
@@ -154,6 +190,7 @@ async function submit() {
         <small class="hint">标签会出现在板块页顶部，方便别人找到同类帖子。</small>
       </div>
 
+      <p v-if="draftTip" class="draft-tip">{{ draftTip }}</p>
       <p v-if="error" class="error">{{ error }}</p>
 
       <div class="actions">

@@ -102,7 +102,7 @@ watch(
         <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
         <div class="row-meta">
           <span class="tag">{{ p.category.name }}</span>
-          <span>{{ p.author.username }}</span>
+          <RouterLink class="author-name" :to="`/u/${p.author.id}`">{{ p.author.username }}</RouterLink>
           <span>{{ timeAgo(p.createdAt) }}</span>
           <span class="dot">·</span>
           <span>{{ p.replyCount }} 回复</span>
@@ -113,6 +113,8 @@ watch(
 </template>
 
 <style scoped>
+.author-name { color: #a8a196; }
+.author-name:hover { color: var(--accent); }
 .forum {
   display: flex;
   flex-direction: column;

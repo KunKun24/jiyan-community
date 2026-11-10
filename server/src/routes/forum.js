@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { one, q } from '../db.js'
 import sanitizeHtml from 'sanitize-html'
 import { sessionUser } from '../session.js'
+import { notify, notifyReply } from '../notify.js'
 
 const r = Router()
 
@@ -247,8 +248,13 @@ r.get('/posts/:id', async (req, res) => {
     }
     await q('UPDATE posts SET views = views + 1 WHERE id = ?', [id])
 
+    const tagRows = await q(
+      `SELECT t.name FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = ? ORDER BY t.id`,
+      [id],
+    )
+
     const replies = await q(
-      `SELECT r.id, r.content, r.created_at, r.user_id, u.username, u.avatar,
+      `SELECT r.id, r.content, r.created_at, r.user_id, u.username, u.avatar, r.like_count,
               r.parent_id, pu.username AS parent_username
          FROM replies r
          JOIN users u ON u.id = r.user_id
@@ -266,6 +272,15 @@ r.get('/posts/:id', async (req, res) => {
       ? await one('SELECT 1 AS x FROM bookmarks WHERE user_id=? AND post_id=?', [viewer, id])
       : null
 
+    const myReplyLikes = new Set()
+    if (viewer && replies.length) {
+      const rl = await q(
+        `SELECT reply_id FROM reply_likes WHERE user_id=? AND reply_id IN (${replies.map(() => '?').join(',')})`,
+        [viewer, ...replies.map((x) => x.id)],
+      )
+      for (const x of rl) myReplyLikes.add(x.reply_id)
+    }
+
     return OK(res, {
       post: {
         id: p.id,
@@ -279,6 +294,7 @@ r.get('/posts/:id', async (req, res) => {
         liked: !!likedRow,
         bookmarked: !!bmRow,
         status: p.status,
+        tags: tagRows.map((x) => x.name),
         author: authorOf(p),
         category: { id: p.category_id, name: p.category_name, slug: p.category_slug },
       },
@@ -288,6 +304,8 @@ r.get('/posts/:id', async (req, res) => {
         createdAt: x.created_at,
         parentId: x.parent_id || null,
         parentUsername: x.parent_username || null,
+        likeCount: Number(x.like_count || 0),
+        liked: myReplyLikes.has(x.id),
         author: authorOf(x),
       })),
     })
@@ -297,23 +315,74 @@ r.get('/posts/:id', async (req, res) => {
   }
 })
 
-/** 作者或管理员设置公开/私密 */
+/** 作者或管理员：改内容 / 改板块标签 / 设置公开私密 */
 r.patch('/posts/:id', async (req, res) => {
   try {
     const uid = needLogin(req, res)
     if (!uid) return
     const id = Number(req.params.id)
-    const status = String(req.body?.status || '')
     if (!id) return FAIL(res, '参数错误')
-    if (!['public', 'private'].includes(status)) return FAIL(res, '状态只能是 public 或 private')
 
-    const p = await one('SELECT id, user_id FROM posts WHERE id=?', [id])
+    const p = await one('SELECT * FROM posts WHERE id=?', [id])
     if (!p) return FAIL(res, '帖子不存在', 404)
     const me = await one('SELECT role FROM users WHERE id=?', [uid])
     if (p.user_id !== uid && me?.role !== 'admin') return FAIL(res, '没有权限', 403)
 
-    await q('UPDATE posts SET status=? WHERE id=?', [status, id])
-    return OK(res, { status }, status === 'private' ? '已设为私密' : '已公开')
+    const body = req.body || {}
+    const wantsEdit = ['title', 'content', 'contentHtml', 'categoryId', 'tags'].some((k) => k in body)
+    const wantsStatus = 'status' in body
+
+    if (!wantsEdit && !wantsStatus) return FAIL(res, '没有要修改的内容')
+
+    let status = p.status
+    if (wantsStatus) {
+      status = String(body.status || '')
+      if (!['public', 'private'].includes(status)) return FAIL(res, '状态只能是 public 或 private')
+    }
+
+    if (!wantsEdit) {
+      await q('UPDATE posts SET status=? WHERE id=?', [status, id])
+      return OK(res, { status }, status === 'private' ? '已设为私密' : '已公开')
+    }
+
+    const title = String(body.title ?? p.title).trim()
+    const content = String(body.content ?? p.content).trim()
+    if (title.length < 2 || title.length > 120) return FAIL(res, '标题需 2-120 字')
+    if (!content) return FAIL(res, '正文不能为空')
+    if (content.length > 20000) return FAIL(res, '正文过长')
+
+    const categoryId = Number(body.categoryId || p.category_id)
+    const cat = await one('SELECT id FROM categories WHERE id=?', [categoryId])
+    if (!cat) return FAIL(res, '板块不存在')
+
+    const contentHtml = 'contentHtml' in body ? cleanHtml(body.contentHtml) : p.content_html || ''
+
+    await q('UPDATE posts SET title=?, content=?, content_html=?, category_id=?, status=? WHERE id=?', [
+      title,
+      content,
+      contentHtml,
+      categoryId,
+      status,
+      id,
+    ])
+
+    if (Array.isArray(body.tags)) {
+      const tags = [...new Set(body.tags.map((t) => String(t).trim()).filter(Boolean))].slice(0, 3)
+      for (const name of tags) {
+        if (name.length > 16) return FAIL(res, '单个标签最多 16 字')
+      }
+      await q('DELETE FROM post_tags WHERE post_id=?', [id])
+      for (const name of tags) {
+        await q('INSERT INTO tags (category_id, name) VALUES (?,?) ON DUPLICATE KEY UPDATE id = id', [
+          categoryId,
+          name,
+        ])
+        const tg = await one('SELECT id FROM tags WHERE category_id=? AND name=?', [categoryId, name])
+        if (tg) await q('INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES (?,?)', [id, tg.id])
+      }
+    }
+
+    return OK(res, { id }, '已保存')
   } catch (e) {
     console.error('[forum.patch]', e)
     return FAIL(res, '服务器错误', 500)
@@ -331,16 +400,18 @@ r.post('/posts/:id/replies', async (req, res) => {
     if (!content) return FAIL(res, '回复不能为空')
     if (content.length > 5000) return FAIL(res, '回复过长')
 
-    const p = await one('SELECT id FROM posts WHERE id=?', [id])
+    const p = await one('SELECT id, user_id, title FROM posts WHERE id=?', [id])
     if (!p) return FAIL(res, '帖子不存在', 404)
 
     let parentId = Number(req.body?.parentId || 0) || null
+    let parentUserId = null
     if (parentId) {
-      const parent = await one('SELECT id FROM replies WHERE id=? AND post_id=?', [parentId, id])
-      if (!parent) parentId = null
+      const parent = await one('SELECT id, user_id FROM replies WHERE id=? AND post_id=?', [parentId, id])
+      if (parent) parentUserId = parent.user_id
+      else parentId = null
     }
 
-    await q('INSERT INTO replies (post_id, user_id, content, parent_id) VALUES (?,?,?,?)', [
+    const ins = await q('INSERT INTO replies (post_id, user_id, content, parent_id) VALUES (?,?,?,?)', [
       id,
       uid,
       content,
@@ -348,7 +419,17 @@ r.post('/posts/:id/replies', async (req, res) => {
     ])
     await q('UPDATE posts SET reply_count = reply_count + 1, last_reply_at = NOW() WHERE id = ?', [id])
     await q('UPDATE users SET points = points + 2 WHERE id = ?', [uid])
-    return OK(res, {}, '回复成功')
+    const me = await one('SELECT username FROM users WHERE id=?', [uid])
+    await notifyReply({
+      postId: id,
+      replyId: ins.insertId,
+      postOwnerId: p.user_id,
+      parentUserId,
+      actorId: uid,
+      actorName: me?.username || '有人',
+      text: content,
+    })
+    return OK(res, { id: ins.insertId }, '回复成功')
   } catch (e) {
     console.error('[forum.reply]', e)
     return FAIL(res, '服务器错误', 500)
@@ -374,11 +455,41 @@ r.post('/posts/:id/like', async (req, res) => {
       await q('INSERT IGNORE INTO post_likes (user_id, post_id) VALUES (?,?)', [uid, id])
       await q('UPDATE posts SET like_count = like_count + 1 WHERE id=?', [id])
       await q('UPDATE users SET likes_received = likes_received + 2 WHERE id=?', [p.user_id])
+      const who = await one('SELECT username FROM users WHERE id=?', [uid])
+      await notify({ userId: p.user_id, actorId: uid, type: 'like', postId: id, body: `${who?.username || '有人'} 赞了你的帖子` })
     }
     const row = await one('SELECT like_count FROM posts WHERE id=?', [id])
     return OK(res, { liked: !liked, likeCount: Number(row.like_count) })
   } catch (e) {
     console.error('[forum.like]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 评论点赞 / 取消 */
+r.post('/replies/:id/like', async (req, res) => {
+  try {
+    const uid = needLogin(req, res)
+    if (!uid) return
+    const id = Number(req.params.id)
+    const rep = await one('SELECT id, user_id, post_id FROM replies WHERE id=?', [id])
+    if (!rep) return FAIL(res, '评论不存在', 404)
+    if (rep.user_id === uid) return FAIL(res, '不能给自己点赞')
+
+    const liked = await one('SELECT 1 AS x FROM reply_likes WHERE user_id=? AND reply_id=?', [uid, id])
+    if (liked) {
+      await q('DELETE FROM reply_likes WHERE user_id=? AND reply_id=?', [uid, id])
+      await q('UPDATE replies SET like_count = GREATEST(like_count - 1, 0) WHERE id=?', [id])
+    } else {
+      await q('INSERT IGNORE INTO reply_likes (user_id, reply_id) VALUES (?,?)', [uid, id])
+      await q('UPDATE replies SET like_count = like_count + 1 WHERE id=?', [id])
+      const who = await one('SELECT username FROM users WHERE id=?', [uid])
+      await notify({ userId: rep.user_id, actorId: uid, type: 'reply_like', postId: rep.post_id, replyId: id, body: `${who?.username || '有人'} 赞了你的评论` })
+    }
+    const row = await one('SELECT like_count FROM replies WHERE id=?', [id])
+    return OK(res, { liked: !liked, likeCount: Number(row.like_count) })
+  } catch (e) {
+    console.error('[forum.replyLike]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })

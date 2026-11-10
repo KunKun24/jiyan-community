@@ -89,14 +89,7 @@ const colors = [
   '#b8386f', '#8a5a2b',
 ]
 
-const emojis = [
-  '😀', '😄', '😁', '😆', '😅', '😂', '🙂', '😉', '😊', '😍',
-  '🤔', '😐', '😴', '😎', '🤯', '😢', '😭', '😡', '🥺', '😇',
-  '👍', '👎', '👏', '🙏', '💪', '🤝', '✌️', '👌', '🫡', '👀',
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '💯',
-  '🔥', '✨', '🎉', '🎊', '⭐', '🌟', '✅', '❌', '⚠️', '📌',
-  '🔗', '📷', '🎬', '🎵', '☕', '🍚', '🐶', '🐱', '🌸', '🌙',
-]
+const emojiCodes = ["1f31f", "1f389", "1f440", "1f44c", "1f44d", "1f44e", "1f44f", "1f494", "1f4aa", "1f4af", "1f4cc", "1f525", "1f600", "1f601", "1f602", "1f603", "1f604", "1f605", "1f606", "1f609", "1f60a", "1f60d", "1f60e", "1f618", "1f621", "1f62d", "1f631", "1f633", "1f634", "1f642", "1f643", "1f64f", "1f914", "1f91d", "1f923", "1f929", "1f970", "26a0", "2705", "270c", "2728", "274c", "2764", "2b50"]
 
 const colorOpen = ref(false)
 const emojiOpen = ref(false)
@@ -118,8 +111,44 @@ function setColor(c: string) {
   colorOpen.value = false
 }
 
-function addEmoji(e: string) {
-  editor.value?.chain().focus().insertContent(e).run()
+function addEmoji(code: string) {
+  editor.value
+    ?.chain()
+    .focus()
+    .setImage({ src: `/emoji/${code}.svg`, alt: '表情' })
+    .run()
+}
+
+const mentionOpen = ref(false)
+const mentionQ = ref('')
+const mentionList = ref<{ id: number; username: string; avatar: string | null }[]>([])
+let mentionTimer: number | undefined
+
+function toggleMention() {
+  toggleHTML()
+  mentionOpen.value = !mentionOpen.value
+  if (mentionOpen.value) searchMention()
+}
+
+function searchMention() {
+  window.clearTimeout(mentionTimer)
+  mentionTimer = window.setTimeout(async () => {
+    const q = mentionQ.value.trim()
+    if (!q) {
+      mentionList.value = []
+      return
+    }
+    const r = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
+    const j = await r.json()
+    mentionList.value = j?.data?.items || []
+  }, 220)
+}
+
+function addMention(u: { username: string }) {
+  editor.value?.chain().focus().insertContent(`@${u.username} `).run()
+  mentionOpen.value = false
+  mentionQ.value = ''
+  mentionList.value = []
 }
 
 function openLink() {
@@ -241,7 +270,17 @@ defineExpose({
       <div class="rte-pop-wrap">
         <button type="button" :class="{ on: emojiOpen }" title="表情" @click.stop="toggleHTML(); emojiOpen = !emojiOpen">表情</button>
         <div v-if="emojiOpen" class="rte-pop emojis">
-          <button v-for="e in emojis" :key="e" type="button" class="e-btn" @click="addEmoji(e)">{{ e }}</button>
+          <button v-for="c in emojiCodes" :key="c" type="button" class="e-btn" :title="c" @click="addEmoji(c)">
+            <img :src="`/emoji/${c}.svg`" alt="表情" />
+          </button>
+        </div>
+        <button type="button" :class="{ on: mentionOpen }" title="提到某人" @click.stop="toggleMention">@</button>
+        <div v-if="mentionOpen" class="rte-pop mention-pop">
+          <input v-model="mentionQ" placeholder="搜用户名" @input="searchMention" />
+          <div v-if="mentionList.length" class="mention-list">
+            <button v-for="u in mentionList" :key="u.id" type="button" @click="addMention(u)">@{{ u.username }}</button>
+          </div>
+          <p v-else class="mention-empty">{{ mentionQ ? '没找到这个用户' : '输入用户名，选中后插入 @' }}</p>
         </div>
       </div>
       <div class="rte-pop-wrap">
@@ -372,7 +411,54 @@ defineExpose({
   width: 28px !important;
   height: 28px;
   padding: 0 !important;
-  font-size: 16px !important;
+  display: grid;
+  place-items: center;
+}
+.e-btn img {
+  width: 21px;
+  height: 21px;
+  transition: transform 0.16s ease;
+}
+.e-btn:hover img {
+  transform: scale(1.22) rotate(-4deg);
+}
+.mention-pop {
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mention-pop input {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: 13px;
+  outline: none;
+}
+.mention-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow: auto;
+}
+.mention-list button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mention-list button:hover {
+  background: #f3efe8;
+}
+.mention-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #a8a196;
 }
 .link-pop {
   display: flex;
@@ -460,6 +546,14 @@ defineExpose({
   border-radius: 8px;
   display: block;
   margin: 8px 0;
+}
+:deep(.rte-content img[src^="/emoji/"]) {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin: 0 1px;
+  vertical-align: -4px;
+  border-radius: 0;
 }
 :deep(.rte-content img.img-spoiler) {
   filter: blur(16px);
