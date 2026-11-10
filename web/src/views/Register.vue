@@ -52,7 +52,7 @@ async function submit() {
     error.value = r.msg
     return
   }
-  router.push('/')
+  router.push('/forum')
 }
 
 onBeforeUnmount(() => window.clearInterval(timer))
