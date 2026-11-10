@@ -46,3 +46,5 @@ export async function upload<T>(url: string, form: FormData): Promise<ApiResp<T>
     return { ok: false, msg: '网络错误，请稍后重试' }
   }
 }
+
+export const del = <T>(url: string) => request<T>(url, { method: 'DELETE' })

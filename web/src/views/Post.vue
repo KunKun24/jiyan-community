@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { get, post } from '../api'
+import { del, get, post } from '../api'
 import { initial, timeAgo } from '../format'
+import { decorateHtml } from '../links'
 import { store } from '../store'
 
 interface Author {
@@ -14,11 +15,14 @@ interface PostData {
   id: number
   title: string
   content: string
+  contentHtml?: string
   views: number
   replyCount: number
   createdAt: string
   likeCount: number
   liked: boolean
+  bookmarked: boolean
+  status: string
   author: Author
   category: { id: number; name: string; slug: string }
 }
@@ -33,6 +37,23 @@ interface Reply {
 const route = useRoute()
 const router = useRouter()
 
+function escapeHtml(t: string) {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+const bodyHtml = computed(() => {
+  if (!data.value) return ''
+  if (data.value.contentHtml) return decorateHtml(data.value.contentHtml)
+  return escapeHtml(data.value.content || '').replace(/\n/g, '<br />')
+})
+
+function onBodyClick(e: MouseEvent) {
+  const t = e.target as HTMLElement
+  if (t.tagName === 'IMG' && t.classList.contains('img-spoiler')) {
+    t.classList.remove('img-spoiler')
+  }
+}
+
 const data = ref<PostData | null>(null)
 const replies = ref<Reply[]>([])
 const loading = ref(true)
@@ -42,6 +63,36 @@ const replyText = ref('')
 const sending = ref(false)
 const replyError = ref('')
 const shareMsg = ref('')
+const showDelete = ref(false)
+const deleting = ref(false)
+
+async function toggleBookmark() {
+  if (!store.user) {
+    router.push('/login')
+    return
+  }
+  const r = await post<{ bookmarked: boolean }>(`/api/posts/${route.params.id}/bookmark`, {})
+  if (r.ok && data.value && r.data) {
+    data.value.bookmarked = r.data.bookmarked
+    shareMsg.value = r.data.bookmarked ? '已收藏' : '已取消收藏'
+    setTimeout(() => (shareMsg.value = ''), 1800)
+  } else if (!r.ok) {
+    shareMsg.value = r.msg
+    setTimeout(() => (shareMsg.value = ''), 2200)
+  }
+}
+
+async function confirmDelete() {
+  deleting.value = true
+  const r = await del(`/api/posts/${route.params.id}`)
+  deleting.value = false
+  if (!r.ok) {
+    shareMsg.value = r.msg
+    showDelete.value = false
+    return
+  }
+  router.push('/forum')
+}
 
 const isOwn = computed(() => !!store.user && !!data.value && store.user.id === data.value.author.id)
 
@@ -152,7 +203,7 @@ onMounted(load)
         <span class="dot">·</span>
         <span>{{ data.views }} 次浏览</span>
       </div>
-      <div class="post-body">{{ data.content }}</div>
+      <div class="post-body" v-html="bodyHtml" @click="onBodyClick"></div>
 
       <div class="post-actions">
         <button
@@ -186,6 +237,24 @@ onMounted(load)
           </svg>
           分享
         </button>
+        <button
+          class="act"
+          :class="{ on: data.bookmarked }"
+          type="button"
+          @click="toggleBookmark"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.6L5 21V4a1 1 0 0 1 1-1z"
+              :fill="data.bookmarked ? 'currentColor' : 'none'"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            />
+          </svg>
+          {{ data.bookmarked ? '已收藏' : '收藏' }}
+        </button>
+        <button v-if="isOwn" class="act danger" type="button" @click="showDelete = true">删除</button>
         <span v-if="shareMsg" class="act-msg">{{ shareMsg }}</span>
       </div>
     </article>
@@ -228,6 +297,19 @@ onMounted(load)
         </template>
       </div>
     </section>
+
+    <div v-if="showDelete" class="modal-mask" @click.self="showDelete = false">
+      <div class="modal">
+        <h3>删除这个帖子？</h3>
+        <p>帖子、下面的回复、点赞和收藏记录都会从数据库里一起删掉，删了找不回来。</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" type="button" @click="showDelete = false">再想想</button>
+          <button class="btn-danger" type="button" :disabled="deleting" @click="confirmDelete">
+            {{ deleting ? '删除中…' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </template>
 </template>
 
@@ -277,6 +359,79 @@ onMounted(load)
   color: #b4483f;
   border-color: #e8cfcb;
   background: #fbf3f1;
+}
+
+.act.danger {
+  color: #b4483f;
+  border-color: #e8cfcb;
+}
+
+.act.danger:hover {
+  background: #fbf3f1;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(38, 34, 28, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: min(400px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 24px 60px rgba(20, 18, 14, 0.22);
+}
+
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.modal p {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.btn-cancel {
+  height: 36px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-danger {
+  height: 36px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #b4483f;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
 }
 
 .act-msg {
@@ -352,7 +507,7 @@ onMounted(load)
   border-top: 1px solid var(--line);
   font-size: 15.5px;
   line-height: 1.85;
-  white-space: pre-wrap;
+  word-break: break-word;
   word-break: break-word;
   color: #2f2a22;
 }
@@ -482,5 +637,73 @@ onMounted(load)
   .reply-body {
     padding-left: 0;
   }
+}
+.post-body :deep(img) {
+  max-width: 100%;
+  border-radius: 8px;
+  display: block;
+  margin: 12px 0;
+}
+.post-body :deep(img.img-spoiler) {
+  filter: blur(16px);
+  cursor: zoom-in;
+  transition: filter 0.18s ease;
+}
+.post-body :deep(video) {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 12px 0;
+  background: #000;
+  display: block;
+}
+.post-body :deep(a) {
+  color: #2b5cad;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.post-body :deep(.lnk-ico) {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+.post-body :deep(.lnk-txt) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.post-body :deep(h2) {
+  font-size: 21px;
+  margin: 20px 0 10px;
+}
+.post-body :deep(h3) {
+  font-size: 17px;
+  margin: 16px 0 8px;
+}
+.post-body :deep(blockquote) {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  color: var(--muted);
+  margin: 12px 0;
+}
+.post-body :deep(ul),
+.post-body :deep(ol) {
+  padding-left: 22px;
+  margin: 10px 0;
+}
+.post-body :deep(pre) {
+  background: #f4f1ea;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
 }
 </style>

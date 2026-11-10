@@ -96,6 +96,67 @@ r.post('/checkin', auth, async (req, res) => {
   }
 })
 
+/** 我的帖子（含私密） */
+r.get('/posts', auth, async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT p.id, p.title, p.status, p.views, p.like_count, p.reply_count, p.created_at,
+              c.name AS category_name, c.slug AS category_slug
+         FROM posts p JOIN categories c ON c.id = p.category_id
+        WHERE p.user_id = ?
+        ORDER BY p.id DESC LIMIT 200`,
+      [req.uid],
+    )
+    return OK(res, {
+      posts: rows.map((x) => ({
+        id: x.id,
+        title: x.title,
+        status: x.status,
+        views: Number(x.views),
+        likeCount: Number(x.like_count),
+        replyCount: Number(x.reply_count),
+        createdAt: x.created_at,
+        category: { name: x.category_name, slug: x.category_slug },
+      })),
+    })
+  } catch (e) {
+    console.error('[user.posts]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 我的收藏 */
+r.get('/bookmarks', auth, async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT b.post_id, b.created_at AS saved_at,
+              p.id AS pid, p.title, p.status, p.views,
+              c.name AS category_name, u.username
+         FROM bookmarks b
+         LEFT JOIN posts p ON p.id = b.post_id
+         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE b.user_id = ?
+        ORDER BY b.created_at DESC LIMIT 200`,
+      [req.uid],
+    )
+    return OK(res, {
+      bookmarks: rows.map((x) => ({
+        postId: x.post_id,
+        savedAt: x.saved_at,
+        available: !!x.pid && x.status === 'public',
+        title: x.title || null,
+        views: x.views ? Number(x.views) : 0,
+        category: x.category_name ? { name: x.category_name } : null,
+        author: x.username || null,
+      })),
+    })
+  } catch (e) {
+    console.error('[user.bookmarks]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
 /** 修改资料：用户名 / 简介 / 所在地 / 网站 / 联系方式 */
 r.patch('/profile', auth, async (req, res) => {
   try {

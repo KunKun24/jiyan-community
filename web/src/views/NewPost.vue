@@ -1,19 +1,35 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { get, post } from '../api'
+import RichEditor from '../components/RichEditor.vue'
 import { store } from '../store'
 
 interface Category {
   id: number
   name: string
   slug: string
+  description?: string | null
 }
 
 const router = useRouter()
 const categories = ref<Category[]>([])
-const form = reactive({ categoryId: 0, title: '', content: '', tags: '' })
+const form = reactive({ categoryId: 0, title: '', content: '', contentHtml: '', tags: '' })
 const error = ref('')
+const catOpen = ref(false)
+const catWrap = ref<HTMLElement | null>(null)
+const currentCat = computed(() => categories.value.find((c) => c.id === form.categoryId) || null)
+
+function pickCat(c: Category) {
+  form.categoryId = c.id
+  catOpen.value = false
+}
+
+function onDocClick(e: MouseEvent) {
+  if (catWrap.value && !catWrap.value.contains(e.target as Node)) catOpen.value = false
+}
+
+onUnmounted(() => document.removeEventListener('click', onDocClick))
 const sending = ref(false)
 
 onMounted(async () => {
@@ -24,6 +40,7 @@ onMounted(async () => {
       form.categoryId = categories.value[0].id
     }
   }
+  document.addEventListener('click', onDocClick)
 })
 
 async function submit() {
@@ -32,6 +49,14 @@ async function submit() {
     return
   }
   error.value = ''
+  if (!form.title.trim()) {
+    error.value = '标题还没写'
+    return
+  }
+  if (!form.content.trim() && !form.contentHtml.trim()) {
+    error.value = '正文还是空的'
+    return
+  }
   sending.value = true
   const tags = form.tags
     .split(/[,，\s]+/)
@@ -42,6 +67,7 @@ async function submit() {
     categoryId: form.categoryId,
     title: form.title,
     content: form.content,
+    contentHtml: form.contentHtml,
     tags,
   })
   sending.value = false
@@ -67,10 +93,35 @@ async function submit() {
 
     <form v-else class="new-form" @submit.prevent="submit">
       <div class="field">
-        <label for="cat">板块</label>
-        <select id="cat" v-model.number="form.categoryId" class="select">
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
+        <label>板块</label>
+        <div ref="catWrap" class="cat-select">
+          <button class="cat-btn" type="button" @click.stop="catOpen = !catOpen">
+            <span>{{ currentCat?.name || '选择板块' }}</span>
+            <svg class="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                d="M6 9l6 6 6-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <div v-if="catOpen" class="cat-menu">
+            <button
+              v-for="c in categories"
+              :key="c.id"
+              class="cat-item"
+              :class="{ on: c.id === form.categoryId }"
+              type="button"
+              @click="pickCat(c)"
+            >
+              <span class="ci-name">{{ c.name }}</span>
+              <span class="ci-desc">{{ c.description || '' }}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="field">
@@ -86,15 +137,9 @@ async function submit() {
       </div>
 
       <div class="field">
-        <label for="content">正文</label>
-        <textarea
-          id="content"
-          v-model="form.content"
-          class="textarea"
-          rows="12"
-          maxlength="20000"
-          placeholder="慢慢写，不用急。"
-        ></textarea>
+        <label>正文</label>
+        <RichEditor v-model="form.contentHtml" @update:text="form.content = $event" />
+        <small class="hint">支持图片、视频、表情、链接；贴上的链接会自动显示站点图标。</small>
       </div>
 
       <div class="field">
@@ -125,6 +170,90 @@ async function submit() {
 .new-wrap {
   max-width: 760px;
   margin: 0 auto;
+}
+
+.cat-select {
+  position: relative;
+}
+
+.cat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.cat-btn:hover {
+  border-color: #d9d3c7;
+}
+
+.chev {
+  color: #a8a196;
+  transition: transform 0.18s ease;
+}
+
+.cat-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(38, 34, 28, 0.12);
+}
+
+.cat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.cat-item:hover {
+  background: #f6f3ee;
+}
+
+.cat-item.on {
+  background: #eef2ee;
+}
+
+.ci-name {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.cat-item.on .ci-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ci-desc {
+  font-size: 11.5px;
+  color: #a8a196;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .new-head {

@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import authRouter from './src/routes/auth.js';
+import authRouter from './src/routes/auth.js'
+import uploadRouter from './src/routes/upload.js';
 import forumRouter from './src/routes/forum.js';
 import userRouter from './src/routes/user.js';
 import noticeRouter from './src/routes/notice.js';
@@ -14,7 +15,8 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'shequ-server', ts: Date.now() });
 });
 
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authRouter)
+app.use('/api/upload', uploadRouter);
 app.use('/api', forumRouter);
 app.use('/api/user', userRouter);
 app.use('/api', noticeRouter);

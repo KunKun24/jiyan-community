@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { get } from '../api'
-import { timeAgo } from '../format'
+import { fmtNum, timeAgo } from '../format'
 
 interface Category {
   id: number
@@ -21,6 +21,8 @@ interface PostItem {
   id: number
   title: string
   excerpt: string
+  cover?: string | null
+  imageCount?: number
   views: number
   replyCount: number
   createdAt: string
@@ -117,7 +119,11 @@ watch(slug, async () => {
     </div>
 
     <div v-else class="feed">
-      <article v-for="p in posts" :key="p.id" class="row">
+      <article v-for="p in posts" :key="p.id" class="row" :class="{ 'has-thumb': p.cover }">
+        <RouterLink v-if="p.cover" class="row-thumb" :to="`/post/${p.id}`">
+          <img :src="p.cover" alt="" loading="lazy" />
+          <span v-if="(p.imageCount || 0) > 1" class="thumb-more">+{{ (p.imageCount || 1) - 1 }}</span>
+        </RouterLink>
         <RouterLink class="row-title" :to="`/post/${p.id}`">{{ p.title }}</RouterLink>
         <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
         <div class="row-meta">
@@ -127,7 +133,7 @@ watch(slug, async () => {
           <span class="dot">·</span>
           <span>{{ p.replyCount }} 回复</span>
           <span class="dot">·</span>
-          <span>{{ p.views }} 浏览</span>
+          <span class="eye-wrap"><svg class="eye" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>{{ fmtNum(p.views) }}</span>
         </div>
       </article>
     </div>
@@ -303,6 +309,17 @@ watch(slug, async () => {
   font-size: 11.5px;
 }
 
+.eye {
+  vertical-align: -1px;
+  margin-right: 3px;
+  opacity: 0.65;
+}
+
+.eye-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
 .dot {
   color: #cfc8bb;
 }
@@ -327,5 +344,37 @@ watch(slug, async () => {
   .row-title {
     font-size: 15px;
   }
+}
+
+.row.has-thumb {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  grid-template-areas: 'thumb title' 'thumb excerpt' 'thumb meta';
+  column-gap: 14px;
+}
+.row.has-thumb .row-title { grid-area: title; }
+.row.has-thumb .row-excerpt { grid-area: excerpt; }
+.row.has-thumb .row-meta { grid-area: meta; }
+.row-thumb {
+  grid-area: thumb;
+  position: relative;
+  align-self: start;
+  width: 96px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f1ede5;
+  display: block;
+}
+.row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-more {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  background: rgba(22, 21, 15, 0.72);
+  color: #fff;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 10px;
 }
 </style>

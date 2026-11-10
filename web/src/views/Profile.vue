@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { get, post } from '../api'
-import { initial } from '../format'
+import { fmtNum, initial, timeAgo } from '../format'
 
 interface Profile {
   id: number
@@ -21,6 +21,24 @@ interface Profile {
   lastCheckinOn: string | null
 }
 
+interface MyPost {
+  id: number
+  title: string
+  status: string
+  views: number
+  createdAt: string
+  category: { name: string; slug: string }
+}
+
+interface Bookmark {
+  postId: number
+  available: boolean
+  title: string | null
+  author: string | null
+  category: { name: string } | null
+  savedAt: string
+}
+
 interface Level {
   level: number
   name: string
@@ -37,6 +55,8 @@ const level = ref<Level | null>(null)
 const loading = ref(true)
 const checkedIn = ref(false)
 const checkinMsg = ref('')
+const myPosts = ref<MyPost[]>([])
+const bookmarks = ref<Bookmark[]>([])
 
 function todayStr() {
   const d = new Date()
@@ -73,6 +93,13 @@ onMounted(async () => {
   level.value = (r.data as { level?: Level })?.level ?? null
   stats.value = r.data?.stats ?? { posts: 0, replies: 0 }
   checkedIn.value = !!profile.value?.lastCheckinOn && profile.value.lastCheckinOn === todayStr()
+
+  const [a, b] = await Promise.all([
+    get<{ posts: MyPost[] }>('/api/user/posts'),
+    get<{ bookmarks: Bookmark[] }>('/api/user/bookmarks'),
+  ])
+  if (a.ok) myPosts.value = a.data?.posts ?? []
+  if (b.ok) bookmarks.value = b.data?.bookmarks ?? []
   loading.value = false
 })
 </script>
@@ -152,6 +179,41 @@ onMounted(async () => {
           </dd>
         </div>
       </dl>
+    </section>
+
+    <section class="card">
+      <h2>我的帖子</h2>
+      <p v-if="!myPosts.length" class="empty">还没发过帖子。</p>
+      <div v-else class="list">
+        <RouterLink v-for="p in myPosts" :key="p.id" class="item" :to="`/post/${p.id}`">
+          <span class="item-title">
+            {{ p.title }}
+            <span v-if="p.status === 'private'" class="badge">私密</span>
+          </span>
+          <span class="item-meta">
+            {{ p.category.name }} · {{ timeAgo(p.createdAt) }} · {{ fmtNum(p.views) }} 浏览
+          </span>
+        </RouterLink>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>我的收藏</h2>
+      <p v-if="!bookmarks.length" class="empty">还没有收藏。看到值得留的帖子，点一下书签。</p>
+      <div v-else class="list">
+        <template v-for="b in bookmarks" :key="b.postId">
+          <RouterLink v-if="b.available" class="item" :to="`/post/${b.postId}`">
+            <span class="item-title">{{ b.title }}</span>
+            <span class="item-meta">
+              {{ b.author }}<template v-if="b.category"> · {{ b.category.name }}</template>
+            </span>
+          </RouterLink>
+          <div v-else class="item gone">
+            <span class="item-title">该帖子可能已被版主私密或删除</span>
+            <span class="item-meta">收藏于 {{ timeAgo(b.savedAt) }}</span>
+          </div>
+        </template>
+      </div>
     </section>
   </div>
 </template>
@@ -404,6 +466,59 @@ dd a {
   margin: -6px 0 14px;
   font-size: 12.5px;
   color: var(--accent);
+}
+
+.empty {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  color: #a09a8e;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 2px;
+  border-bottom: 1px solid #efeae1;
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.item-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.item:hover .item-title {
+  color: var(--accent);
+}
+
+.item-meta {
+  font-size: 12px;
+  color: #a09a8e;
+}
+
+.badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f4ece4;
+  color: #9a6b4a;
+  font-size: 11px;
+}
+
+.gone .item-title {
+  color: #a8a196;
+  font-style: normal;
 }
 
 @media (max-width: 700px) {
