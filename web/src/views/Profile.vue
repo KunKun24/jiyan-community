@@ -60,6 +60,7 @@ const bookmarks = ref<Bookmark[]>([])
 const selected = ref<number[]>([])
 const delTarget = ref<MyPost | null>(null)
 const batchDelete = ref(false)
+const pendingIds = ref<number[]>([])
 const opMsg = ref('')
 
 function flash(t: string) {
@@ -107,13 +108,20 @@ function askDelete(p: MyPost) {
 
 function askBulkDelete() {
   if (!selected.value.length) return
+  pendingIds.value = [...selected.value]
   delTarget.value = null
   batchDelete.value = true
 }
 
+function closeModal() {
+  delTarget.value = null
+  batchDelete.value = false
+  pendingIds.value = []
+}
+
 async function doDelete() {
   if (batchDelete.value) {
-    const ids = [...selected.value]
+    const ids = [...pendingIds.value]
     let done = 0
     for (const id of ids) {
       const r = await del(`/api/posts/${id}`)
@@ -121,7 +129,7 @@ async function doDelete() {
     }
     myPosts.value = myPosts.value.filter((p) => !ids.includes(p.id))
     selected.value = []
-    batchDelete.value = false
+    closeModal()
     flash(`已删除 ${done} 篇`)
     return
   }
@@ -130,12 +138,12 @@ async function doDelete() {
   const r = await del(`/api/posts/${p.id}`)
   if (!r.ok) {
     flash(r.msg)
-    delTarget.value = null
+    closeModal()
     return
   }
   myPosts.value = myPosts.value.filter((x) => x.id !== p.id)
   selected.value = selected.value.filter((x) => x !== p.id)
-  delTarget.value = null
+  closeModal()
   flash('帖子已删除')
 }
 
@@ -334,13 +342,13 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-if="delTarget || batchDelete" class="modal-mask" @click.self="delTarget = null; batchDelete = false">
+      <div v-if="delTarget || batchDelete" class="modal-mask" @click.self="closeModal">
         <div class="modal">
           <h3>{{ batchDelete ? '批量删除帖子' : '删除帖子' }}</h3>
-          <p v-if="batchDelete">将删除选中的 {{ selected.length }} 篇帖子，回复、点赞、收藏一并清掉，不能恢复。</p>
+          <p v-if="batchDelete">将删除选中的 {{ pendingIds.length }} 篇帖子，回复、点赞、收藏一并清掉，不能恢复。</p>
           <p v-else>《{{ delTarget?.title }}》会被永久删除，回复、点赞、收藏一并清掉，不能恢复。</p>
           <div class="modal-acts">
-            <button class="btn-ghost" type="button" @click="delTarget = null; batchDelete = false">取消</button>
+            <button class="btn-ghost" type="button" @click="closeModal">取消</button>
             <button class="btn-danger" type="button" @click="doDelete">确认删除</button>
           </div>
         </div>
@@ -756,6 +764,7 @@ dd a {
 }
 .post-item {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
 }
@@ -802,5 +811,59 @@ dd a {
 .op.danger:hover {
   background: #fbf0ed;
   color: #b4432f;
+}
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(38, 34, 28, 0.34);
+  backdrop-filter: blur(2px);
+}
+.modal {
+  width: min(400px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 24px 60px rgba(20, 18, 14, 0.22);
+}
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.modal p {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.modal-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.btn-ghost {
+  height: 36px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn-danger {
+  height: 36px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #b4483f;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }
 </style>
