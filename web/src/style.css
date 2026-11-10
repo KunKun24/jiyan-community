@@ -42,3 +42,123 @@ img {
 ::selection {
   background: rgba(62, 92, 75, 0.16);
 }
+
+/* ---------- 认证页表单 ---------- */
+.auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 26px;
+}
+.auth-field {
+  display: grid;
+  gap: 7px;
+}
+.auth-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.auth-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.auth-input::placeholder {
+  color: #a8a196;
+}
+.auth-input:focus {
+  border-color: #b9c9bf;
+  box-shadow: 0 0 0 3px rgba(62, 92, 75, 0.1);
+}
+.auth-code-row {
+  display: flex;
+  gap: 10px;
+}
+.auth-code-row .auth-input {
+  flex: 1;
+  min-width: 0;
+}
+.auth-code-btn {
+  flex: none;
+  height: 46px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+.auth-code-btn:hover:not(:disabled) {
+  background: #f4f1ec;
+}
+.auth-code-btn:disabled {
+  color: #a8a196;
+  cursor: default;
+}
+.auth-submit {
+  height: 48px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.auth-submit:hover:not(:disabled) {
+  background: #35503f;
+}
+.auth-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.auth-submit-link {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+.auth-error {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: 9px;
+  background: #fdf2f0;
+  border: 1px solid #f3d6cf;
+  color: #b4492f;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.auth-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.auth-switch {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.auth-switch a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.auth-switch a:hover {
+  text-decoration: underline;
+}

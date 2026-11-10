@@ -1,13 +1,25 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import authRouter from './src/routes/auth.js';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'shequ-server', ts: Date.now() });
+});
+
+app.use('/api/auth', authRouter);
+
+app.use((req, res) => {
+  res.status(404).json({ ok: false, msg: '接口不存在' });
+});
+
+app.use((err, req, res, next) => {
+  console.error('[unhandled]', err);
+  res.status(500).json({ ok: false, msg: '服务器错误' });
 });
 
 const port = Number(process.env.PORT || 3000);
