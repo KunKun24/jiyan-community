@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import AppTabs from './AppTabs.vue'
 import { store, logout } from '../store'
 import { initial } from '../format'
 
@@ -20,11 +21,6 @@ async function onLogout() {
           <span>极验社区</span>
         </RouterLink>
 
-        <nav class="topnav">
-          <RouterLink to="/forum">社区</RouterLink>
-          <RouterLink to="/">官网</RouterLink>
-        </nav>
-
         <div class="top-actions">
           <template v-if="store.user">
             <RouterLink class="btn-primary" to="/new">发帖</RouterLink>
@@ -43,8 +39,14 @@ async function onLogout() {
       </div>
     </header>
 
+    <AppTabs />
+
     <main class="shell-main">
-      <slot />
+      <RouterView v-slot="{ Component, route }">
+        <Transition name="tabfade" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </Transition>
+      </RouterView>
     </main>
   </div>
 </template>
@@ -89,18 +91,6 @@ async function onLogout() {
   width: 27px;
   height: 27px;
   border-radius: 7px;
-}
-
-.topnav {
-  display: flex;
-  gap: 18px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.topnav a:hover,
-.topnav a.router-link-active {
-  color: var(--ink);
 }
 
 .top-actions {
@@ -197,18 +187,16 @@ async function onLogout() {
   padding: 28px 22px 64px;
 }
 
-@media (max-width: 640px) {
-  .topnav {
-    display: none;
-  }
+@media (max-width: 700px) {
   .uname {
     display: none;
   }
   .topbar-inner {
     padding: 0 16px;
+    gap: 12px;
   }
   .shell-main {
-    padding: 20px 14px 48px;
+    padding: 20px 14px 84px;
   }
 }
 </style>

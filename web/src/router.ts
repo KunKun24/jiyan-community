@@ -8,10 +8,18 @@ export default createRouter({
     { path: '/login', name: 'login', component: () => import('./views/Login.vue') },
     { path: '/register', name: 'register', component: () => import('./views/Register.vue') },
     { path: '/reset', name: 'reset', component: () => import('./views/Reset.vue') },
-    { path: '/forum', name: 'forum', component: () => import('./views/Forum.vue') },
-    { path: '/post/:id', name: 'post', component: () => import('./views/Post.vue') },
-    { path: '/new', name: 'new-post', component: () => import('./views/NewPost.vue') },
-    { path: '/me', name: 'me', component: () => import('./views/Profile.vue') },
+    {
+      path: '/',
+      component: () => import('./components/ForumLayout.vue'),
+      children: [
+        { path: 'forum', name: 'forum', component: () => import('./views/Forum.vue') },
+        { path: 'categories', name: 'categories', component: () => import('./views/Categories.vue') },
+        { path: 'post/:id', name: 'post', component: () => import('./views/Post.vue') },
+        { path: 'new', name: 'new-post', component: () => import('./views/NewPost.vue') },
+        { path: 'me', name: 'me', component: () => import('./views/Profile.vue') },
+        { path: 'settings', name: 'settings', component: () => import('./views/Settings.vue') },
+      ],
+    },
   ],
   scrollBehavior(to, _from, saved) {
     if (to.hash) return { el: to.hash, behavior: 'smooth' }

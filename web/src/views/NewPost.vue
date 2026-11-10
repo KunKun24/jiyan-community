@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import ForumLayout from '../components/ForumLayout.vue'
 import { get, post } from '../api'
 import { store } from '../store'
 
@@ -45,61 +44,59 @@ async function submit() {
 </script>
 
 <template>
-  <ForumLayout>
-    <div class="new-wrap">
-      <div class="new-head">
-        <h1>发帖</h1>
-        <p>说清楚你想聊什么，就会有人接话。</p>
-      </div>
-
-      <div v-if="!store.user" class="need-login">
-        <p>发帖需要先登录。</p>
-        <RouterLink class="btn" to="/login">去登录</RouterLink>
-      </div>
-
-      <form v-else class="new-form" @submit.prevent="submit">
-        <div class="field">
-          <label for="cat">板块</label>
-          <select id="cat" v-model.number="form.categoryId" class="select">
-            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="title">标题</label>
-          <input
-            id="title"
-            v-model="form.title"
-            class="input"
-            type="text"
-            maxlength="120"
-            placeholder="一句话说清楚这帖讲什么"
-          />
-        </div>
-
-        <div class="field">
-          <label for="content">正文</label>
-          <textarea
-            id="content"
-            v-model="form.content"
-            class="textarea"
-            rows="12"
-            maxlength="20000"
-            placeholder="慢慢写，不用急。"
-          ></textarea>
-        </div>
-
-        <p v-if="error" class="error">{{ error }}</p>
-
-        <div class="actions">
-          <RouterLink class="btn-ghost" to="/forum">取消</RouterLink>
-          <button class="btn-send" type="submit" :disabled="sending">
-            {{ sending ? '发布中…' : '发布帖子' }}
-          </button>
-        </div>
-      </form>
+  <div class="new-wrap">
+    <div class="new-head">
+      <h1>发帖</h1>
+      <p>说清楚你想聊什么，就会有人接话。</p>
     </div>
-  </ForumLayout>
+
+    <div v-if="!store.user" class="need-login">
+      <p>发帖需要先登录。</p>
+      <RouterLink class="btn" to="/login">去登录</RouterLink>
+    </div>
+
+    <form v-else class="new-form" @submit.prevent="submit">
+      <div class="field">
+        <label for="cat">板块</label>
+        <select id="cat" v-model.number="form.categoryId" class="select">
+          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="title">标题</label>
+        <input
+          id="title"
+          v-model="form.title"
+          class="input"
+          type="text"
+          maxlength="120"
+          placeholder="一句话说清楚这帖讲什么"
+        />
+      </div>
+
+      <div class="field">
+        <label for="content">正文</label>
+        <textarea
+          id="content"
+          v-model="form.content"
+          class="textarea"
+          rows="12"
+          maxlength="20000"
+          placeholder="慢慢写，不用急。"
+        ></textarea>
+      </div>
+
+      <p v-if="error" class="error">{{ error }}</p>
+
+      <div class="actions">
+        <RouterLink class="btn-ghost" to="/forum">取消</RouterLink>
+        <button class="btn-send" type="submit" :disabled="sending">
+          {{ sending ? '发布中…' : '发布帖子' }}
+        </button>
+      </div>
+    </form>
+  </div>
 </template>
 
 <style scoped>

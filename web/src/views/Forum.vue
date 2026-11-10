@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import ForumLayout from '../components/ForumLayout.vue'
 import { get } from '../api'
 import { timeAgo } from '../format'
 
@@ -65,51 +64,49 @@ watch(
 </script>
 
 <template>
-  <ForumLayout>
-    <div class="forum">
-      <aside class="side">
-        <p class="side-title">板块</p>
-        <RouterLink class="side-item" :class="{ active: !currentSlug }" to="/forum">
-          <span>全部</span>
-          <em>{{ total }}</em>
-        </RouterLink>
-        <RouterLink
-          v-for="c in categories"
-          :key="c.id"
-          class="side-item"
-          :class="{ active: currentSlug === c.slug }"
-          :to="`/forum?category=${c.slug}`"
-        >
-          <span>{{ c.name }}</span>
-          <em>{{ c.post_count }}</em>
-        </RouterLink>
-      </aside>
+  <div class="forum">
+    <aside class="side">
+      <p class="side-title">板块</p>
+      <RouterLink class="side-item" :class="{ active: !currentSlug }" to="/forum">
+        <span>全部</span>
+        <em>{{ total }}</em>
+      </RouterLink>
+      <RouterLink
+        v-for="c in categories"
+        :key="c.id"
+        class="side-item"
+        :class="{ active: currentSlug === c.slug }"
+        :to="`/forum?category=${c.slug}`"
+      >
+        <span>{{ c.name }}</span>
+        <em>{{ c.post_count }}</em>
+      </RouterLink>
+    </aside>
 
-      <section class="feed">
-        <header class="feed-head">
-          <h1>{{ heading }}</h1>
-          <p>{{ subheading }}</p>
-        </header>
+    <section class="feed">
+      <header class="feed-head">
+        <h1>{{ heading }}</h1>
+        <p>{{ subheading }}</p>
+      </header>
 
-        <div v-if="loading" class="empty">加载中…</div>
-        <div v-else-if="!posts.length" class="empty">
-          这里还空着。发第一条帖子，给大家开个头。
+      <div v-if="loading" class="empty">加载中…</div>
+      <div v-else-if="!posts.length" class="empty">
+        这里还空着。发第一条帖子，给大家开个头。
+      </div>
+
+      <article v-for="p in posts" :key="p.id" class="row">
+        <RouterLink class="row-title" :to="`/post/${p.id}`">{{ p.title }}</RouterLink>
+        <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
+        <div class="row-meta">
+          <span class="tag">{{ p.category.name }}</span>
+          <span>{{ p.author.username }}</span>
+          <span>{{ timeAgo(p.createdAt) }}</span>
+          <span class="dot">·</span>
+          <span>{{ p.replyCount }} 回复</span>
         </div>
-
-        <article v-for="p in posts" :key="p.id" class="row">
-          <RouterLink class="row-title" :to="`/post/${p.id}`">{{ p.title }}</RouterLink>
-          <p v-if="p.excerpt" class="row-excerpt">{{ p.excerpt }}</p>
-          <div class="row-meta">
-            <span class="tag">{{ p.category.name }}</span>
-            <span>{{ p.author.username }}</span>
-            <span>{{ timeAgo(p.createdAt) }}</span>
-            <span class="dot">·</span>
-            <span>{{ p.replyCount }} 回复</span>
-          </div>
-        </article>
-      </section>
-    </div>
-  </ForumLayout>
+      </article>
+    </section>
+  </div>
 </template>
 
 <style scoped>

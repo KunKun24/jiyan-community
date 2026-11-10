@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ForumLayout from '../components/ForumLayout.vue'
 import { get, post } from '../api'
 import { initial, timeAgo } from '../format'
 import { store } from '../store'
@@ -76,70 +75,68 @@ onMounted(load)
 </script>
 
 <template>
-  <ForumLayout>
-    <div v-if="loading" class="state">加载中…</div>
-    <div v-else-if="errorMsg" class="state">{{ errorMsg }}</div>
+  <div v-if="loading" class="state">加载中…</div>
+  <div v-else-if="errorMsg" class="state">{{ errorMsg }}</div>
 
-    <template v-else-if="data">
-      <nav class="crumbs">
-        <RouterLink to="/forum">社区</RouterLink>
-        <span>/</span>
-        <RouterLink :to="`/forum?category=${data.category.slug}`">{{ data.category.name }}</RouterLink>
-      </nav>
+  <template v-else-if="data">
+    <nav class="crumbs">
+      <RouterLink to="/forum">社区</RouterLink>
+      <span>/</span>
+      <RouterLink :to="`/forum?category=${data.category.slug}`">{{ data.category.name }}</RouterLink>
+    </nav>
 
-      <article class="post">
-        <h1 class="post-title">{{ data.title }}</h1>
-        <div class="post-meta">
-          <span class="avatar">{{ initial(data.author.username) }}</span>
-          <span>{{ data.author.username }}</span>
-          <span class="dot">·</span>
-          <span>{{ timeAgo(data.createdAt) }}</span>
-          <span class="dot">·</span>
-          <span>{{ data.views }} 次浏览</span>
+    <article class="post">
+      <h1 class="post-title">{{ data.title }}</h1>
+      <div class="post-meta">
+        <span class="avatar">{{ initial(data.author.username) }}</span>
+        <span>{{ data.author.username }}</span>
+        <span class="dot">·</span>
+        <span>{{ timeAgo(data.createdAt) }}</span>
+        <span class="dot">·</span>
+        <span>{{ data.views }} 次浏览</span>
+      </div>
+      <div class="post-body">{{ data.content }}</div>
+    </article>
+
+    <section class="replies">
+      <h2 class="replies-title">{{ replies.length }} 条回复</h2>
+
+      <div v-if="!replies.length" class="state small">还没有人回复，说点什么吧。</div>
+
+      <article v-for="(rp, i) in replies" :key="rp.id" class="reply">
+        <div class="reply-head">
+          <span class="avatar sm">{{ initial(rp.author.username) }}</span>
+          <span class="reply-name">{{ rp.author.username }}</span>
+          <span class="reply-floor">#{{ i + 1 }}</span>
+          <span class="reply-time">{{ timeAgo(rp.createdAt) }}</span>
         </div>
-        <div class="post-body">{{ data.content }}</div>
+        <div class="reply-body">{{ rp.content }}</div>
       </article>
 
-      <section class="replies">
-        <h2 class="replies-title">{{ replies.length }} 条回复</h2>
-
-        <div v-if="!replies.length" class="state small">还没有人回复，说点什么吧。</div>
-
-        <article v-for="(rp, i) in replies" :key="rp.id" class="reply">
-          <div class="reply-head">
-            <span class="avatar sm">{{ initial(rp.author.username) }}</span>
-            <span class="reply-name">{{ rp.author.username }}</span>
-            <span class="reply-floor">#{{ i + 1 }}</span>
-            <span class="reply-time">{{ timeAgo(rp.createdAt) }}</span>
+      <div class="reply-box">
+        <template v-if="store.user">
+          <textarea
+            v-model="replyText"
+            class="reply-input"
+            rows="4"
+            maxlength="5000"
+            placeholder="写下你的回复…"
+          ></textarea>
+          <p v-if="replyError" class="reply-error">{{ replyError }}</p>
+          <div class="reply-actions">
+            <button class="btn-send" type="button" :disabled="sending" @click="submitReply">
+              {{ sending ? '发送中…' : '发表回复' }}
+            </button>
           </div>
-          <div class="reply-body">{{ rp.content }}</div>
-        </article>
-
-        <div class="reply-box">
-          <template v-if="store.user">
-            <textarea
-              v-model="replyText"
-              class="reply-input"
-              rows="4"
-              maxlength="5000"
-              placeholder="写下你的回复…"
-            ></textarea>
-            <p v-if="replyError" class="reply-error">{{ replyError }}</p>
-            <div class="reply-actions">
-              <button class="btn-send" type="button" :disabled="sending" @click="submitReply">
-                {{ sending ? '发送中…' : '发表回复' }}
-              </button>
-            </div>
-          </template>
-          <template v-else>
-            <p class="login-hint">
-              <RouterLink to="/login">登录</RouterLink> 后可以回复。
-            </p>
-          </template>
-        </div>
-      </section>
-    </template>
-  </ForumLayout>
+        </template>
+        <template v-else>
+          <p class="login-hint">
+            <RouterLink to="/login">登录</RouterLink> 后可以回复。
+          </p>
+        </template>
+      </div>
+    </section>
+  </template>
 </template>
 
 <style scoped>

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import ForumLayout from '../components/ForumLayout.vue'
-import { get, patch, post, upload } from '../api'
-import { store } from '../store'
+import { get } from '../api'
 import { initial } from '../format'
 
 interface Profile {
@@ -15,31 +13,15 @@ interface Profile {
   location: string | null
   website: string | null
   contact: string | null
-  role: string
   createdAt: string
 }
 
 const router = useRouter()
-
 const profile = ref<Profile | null>(null)
 const stats = ref({ posts: 0, replies: 0 })
 const loading = ref(true)
 
-const form = reactive({ username: '', bio: '', location: '', website: '', contact: '' })
-const msg = ref('')
-const err = ref('')
-const saving = ref(false)
-
-const pw = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
-const pwMsg = ref('')
-const pwErr = ref('')
-const pwSaving = ref(false)
-
-const uploading = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
-
-async function load() {
-  loading.value = true
+onMounted(async () => {
   const r = await get<{ user: Profile; stats: { posts: number; replies: number } }>('/api/user/profile')
   if (!r.ok) {
     if (r.msg.includes('登录')) router.push('/login')
@@ -48,185 +30,58 @@ async function load() {
   }
   profile.value = r.data?.user ?? null
   stats.value = r.data?.stats ?? { posts: 0, replies: 0 }
-  Object.assign(form, {
-    username: profile.value?.username ?? '',
-    bio: profile.value?.bio ?? '',
-    location: profile.value?.location ?? '',
-    website: profile.value?.website ?? '',
-    contact: profile.value?.contact ?? '',
-  })
   loading.value = false
-}
-
-async function saveProfile() {
-  msg.value = ''
-  err.value = ''
-  saving.value = true
-  const r = await patch<{ user: Profile }>('/api/user/profile', { ...form })
-  saving.value = false
-  if (!r.ok) {
-    err.value = r.msg
-    return
-  }
-  profile.value = r.data?.user ?? profile.value
-  if (store.user) {
-    store.user.username = form.username
-  }
-  msg.value = '资料已保存'
-}
-
-async function savePassword() {
-  pwMsg.value = ''
-  pwErr.value = ''
-  pwSaving.value = true
-  const r = await post('/api/user/password', { ...pw })
-  pwSaving.value = false
-  if (!r.ok) {
-    pwErr.value = r.msg
-    return
-  }
-  pw.oldPassword = ''
-  pw.newPassword = ''
-  pw.confirmPassword = ''
-  pwMsg.value = '密码已修改，下次登录请用新密码'
-}
-
-function pickAvatar() {
-  fileInput.value?.click()
-}
-
-async function onFile(e: Event) {
-  const input = e.target as HTMLInputElement
-  const f = input.files?.[0]
-  if (!f) return
-  err.value = ''
-  msg.value = ''
-  uploading.value = true
-  const fd = new FormData()
-  fd.append('file', f)
-  const r = await upload<{ avatar: string }>('/api/user/avatar', fd)
-  uploading.value = false
-  input.value = ''
-  if (!r.ok) {
-    err.value = r.msg
-    return
-  }
-  const url = r.data?.avatar ?? null
-  if (profile.value) profile.value.avatar = url
-  if (store.user) store.user.avatar = url
-  msg.value = '头像已更新'
-}
-
-onMounted(load)
+})
 </script>
 
 <template>
-  <ForumLayout>
-    <div v-if="loading" class="state">加载中…</div>
+  <div v-if="loading" class="state">加载中…</div>
 
-    <div v-else-if="profile" class="profile-wrap">
-      <header class="phead">
-        <button class="pavatar" type="button" :disabled="uploading" @click="pickAvatar">
-          <img v-if="profile.avatar" :src="profile.avatar" alt="头像" />
-          <span v-else class="pavatar-ph">{{ initial(profile.username) }}</span>
-          <em class="pavatar-mask">{{ uploading ? '上传中…' : '更换头像' }}</em>
-        </button>
-        <input
-          ref="fileInput"
-          class="hidden-file"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          @change="onFile"
-        />
+  <div v-else-if="profile" class="profile">
+    <header class="phead">
+      <img v-if="profile.avatar" class="big-avatar" :src="profile.avatar" alt="头像" />
+      <span v-else class="big-avatar ph">{{ initial(profile.username) }}</span>
 
-        <div class="pinfo">
-          <h1>{{ profile.username }}</h1>
-          <p class="pmeta">{{ profile.email }}<span class="dot">·</span>加入于 {{ profile.createdAt.slice(0, 10) }}</p>
-          <p class="pstats">{{ stats.posts }} 帖<span class="dot">·</span>{{ stats.replies }} 回复</p>
+      <div class="pinfo">
+        <h1>{{ profile.username }}</h1>
+        <p class="bio">{{ profile.bio || '这个人还没有写简介。' }}</p>
+        <p class="meta">
+          加入于 {{ profile.createdAt.slice(0, 10) }}
+          <span class="dot">·</span>{{ stats.posts }} 帖
+          <span class="dot">·</span>{{ stats.replies }} 回复
+        </p>
+      </div>
+
+      <RouterLink class="btn-edit" to="/settings">编辑资料</RouterLink>
+    </header>
+
+    <section class="card">
+      <h2>资料</h2>
+      <dl>
+        <div class="row">
+          <dt>邮箱</dt>
+          <dd>{{ profile.email }}</dd>
         </div>
-      </header>
-
-      <p v-if="msg" class="toast ok">{{ msg }}</p>
-      <p v-if="err" class="toast bad">{{ err }}</p>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>基本资料</h2>
-          <p>改个名字、写两句话，别人就知道你是谁了。</p>
+        <div class="row">
+          <dt>所在地</dt>
+          <dd>{{ profile.location || '未填写' }}</dd>
         </div>
-
-        <form class="fields" @submit.prevent="saveProfile">
-          <div class="field">
-            <label for="u">用户名</label>
-            <input id="u" v-model="form.username" class="input" type="text" maxlength="32" />
-            <small>2-32 位，中英文、数字、下划线、连字符都可以。</small>
-          </div>
-
-          <div class="field">
-            <label for="b">个人简介</label>
-            <textarea id="b" v-model="form.bio" class="textarea" rows="3" maxlength="300" placeholder="一句话介绍自己"></textarea>
-            <small>{{ form.bio.length }} / 300</small>
-          </div>
-
-          <div class="grid2">
-            <div class="field">
-              <label for="l">所在地</label>
-              <input id="l" v-model="form.location" class="input" type="text" maxlength="64" placeholder="杭州" />
-            </div>
-            <div class="field">
-              <label for="c">联系方式</label>
-              <input id="c" v-model="form.contact" class="input" type="text" maxlength="120" placeholder="Telegram / QQ / 邮箱" />
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="w">个人网站</label>
-            <input id="w" v-model="form.website" class="input" type="url" maxlength="200" placeholder="https://" />
-          </div>
-
-          <div class="actions">
-            <button class="btn-save" type="submit" :disabled="saving">
-              {{ saving ? '保存中…' : '保存资料' }}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>修改密码</h2>
-          <p>需要原密码。改完下次登录用新的。</p>
+        <div class="row">
+          <dt>联系方式</dt>
+          <dd>{{ profile.contact || '未填写' }}</dd>
         </div>
-
-        <form class="fields" @submit.prevent="savePassword">
-          <div class="field">
-            <label for="op">原密码</label>
-            <input id="op" v-model="pw.oldPassword" class="input" type="password" autocomplete="current-password" />
-          </div>
-          <div class="grid2">
-            <div class="field">
-              <label for="np">新密码</label>
-              <input id="np" v-model="pw.newPassword" class="input" type="password" autocomplete="new-password" />
-              <small>至少 6 位。</small>
-            </div>
-            <div class="field">
-              <label for="cp">确认新密码</label>
-              <input id="cp" v-model="pw.confirmPassword" class="input" type="password" autocomplete="new-password" />
-            </div>
-          </div>
-
-          <p v-if="pwErr" class="inline-bad">{{ pwErr }}</p>
-          <p v-if="pwMsg" class="inline-ok">{{ pwMsg }}</p>
-
-          <div class="actions">
-            <button class="btn-save" type="submit" :disabled="pwSaving">
-              {{ pwSaving ? '提交中…' : '修改密码' }}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
-  </ForumLayout>
+        <div class="row">
+          <dt>个人网站</dt>
+          <dd>
+            <a v-if="profile.website" :href="profile.website" target="_blank" rel="noopener noreferrer">
+              {{ profile.website }}
+            </a>
+            <span v-else>未填写</span>
+          </dd>
+        </div>
+      </dl>
+    </section>
+  </div>
 </template>
 
 <style scoped>
@@ -237,238 +92,152 @@ onMounted(load)
   font-size: 14px;
 }
 
-.profile-wrap {
+.profile {
   max-width: 760px;
   margin: 0 auto;
 }
 
 .phead {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
-  padding: 6px 0 26px;
+  padding: 4px 0 24px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
-.pavatar {
-  position: relative;
-  width: 84px;
-  height: 84px;
+.big-avatar {
+  width: 88px;
+  height: 88px;
   flex: none;
-  padding: 0;
-  border: 0;
   border-radius: 50%;
-  overflow: hidden;
-  background: #e8e4db;
-  cursor: pointer;
-}
-
-.pavatar img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.pavatar-ph {
-  width: 100%;
-  height: 100%;
+.big-avatar.ph {
   display: grid;
   place-items: center;
-  font-size: 30px;
-  font-weight: 600;
+  background: #e8e4db;
   color: #4a453a;
+  font-size: 32px;
+  font-weight: 600;
 }
 
-.pavatar-mask {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-style: normal;
-  font-size: 12px;
-  color: #fff;
-  background: rgba(20, 18, 14, 0.5);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.pavatar:hover .pavatar-mask {
-  opacity: 1;
-}
-
-.hidden-file {
-  display: none;
+.pinfo {
+  min-width: 0;
+  flex: 1;
 }
 
 .pinfo h1 {
   margin: 0;
   font-size: 24px;
   letter-spacing: -0.02em;
-  font-weight: 700;
 }
 
-.pmeta,
-.pstats {
-  margin: 7px 0 0;
-  font-size: 13px;
+.bio {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.meta {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  color: #a8a196;
 }
 
 .dot {
-  margin: 0 8px;
-  color: #c9c3b7;
+  margin: 0 7px;
+  color: #cfc8bb;
 }
 
-.toast {
-  margin: 0 0 16px;
-  padding: 10px 13px;
-  border-radius: 9px;
+.btn-edit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
   font-size: 13.5px;
+  font-weight: 600;
 }
-.toast.ok {
-  background: #eef5f0;
-  border: 1px solid #d6e6dc;
-  color: #2f5b41;
-}
-.toast.bad {
-  background: #fdf2f0;
-  border: 1px solid #f3d6cf;
-  color: #b4492f;
+
+.btn-edit:hover {
+  background: #f4f1ec;
 }
 
 .card {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 24px 26px;
-  margin-bottom: 20px;
+  padding: 22px 24px;
 }
 
-.card-head {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
-}
-
-.card-head h2 {
-  margin: 0;
-  font-size: 16.5px;
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
   font-weight: 600;
 }
 
-.card-head p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--muted);
+dl {
+  margin: 0;
 }
 
-.fields {
-  display: grid;
-  gap: 18px;
-}
-
-.grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.field {
-  display: grid;
-  gap: 7px;
-}
-
-.field label {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.field small {
-  font-size: 12px;
-  color: #a8a196;
-}
-
-.input,
-.textarea {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: #fff;
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 14.8px;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.input {
-  height: 44px;
-  padding: 0 13px;
-}
-
-.textarea {
-  padding: 12px 13px;
-  line-height: 1.7;
-  resize: vertical;
-}
-
-.input:focus,
-.textarea:focus {
-  border-color: #b9c9bf;
-  box-shadow: 0 0 0 3px rgba(62, 92, 75, 0.1);
-}
-
-.actions {
+.row {
   display: flex;
-  justify-content: flex-end;
-}
-
-.btn-save {
-  height: 42px;
-  padding: 0 22px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0ece4;
   font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-}
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
-.inline-bad {
-  margin: 0;
-  font-size: 13px;
-  color: #b4492f;
-}
-.inline-ok {
-  margin: 0;
-  font-size: 13px;
-  color: #2f5b41;
+.row:last-child {
+  border-bottom: 0;
 }
 
-@media (max-width: 640px) {
+dt {
+  width: 84px;
+  flex: none;
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+dd a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 700px) {
   .phead {
     gap: 14px;
   }
-  .pavatar {
+  .big-avatar {
     width: 68px;
     height: 68px;
   }
   .pinfo h1 {
     font-size: 20px;
   }
-  .card {
-    padding: 20px 18px;
+  .btn-edit {
+    align-self: flex-start;
+    height: 32px;
+    padding: 0 12px;
   }
-  .grid2 {
-    grid-template-columns: 1fr;
+  .card {
+    padding: 18px 16px;
   }
 }
 </style>
