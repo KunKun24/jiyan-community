@@ -41,6 +41,34 @@ r.get('/categories', async (req, res) => {
   }
 })
 
+/** 板块详情：板块信息 + 该板块下的标签 */
+r.get('/categories/:slug', async (req, res) => {
+  try {
+    const slug = String(req.params.slug || '').trim()
+    const c = await one('SELECT id, name, slug, description FROM categories WHERE slug = ?', [slug])
+    if (!c) return FAIL(res, '板块不存在', 404)
+
+    const tags = await q(
+      `SELECT t.name, COUNT(pt.post_id) AS cnt
+         FROM tags t
+         JOIN post_tags pt ON pt.tag_id = t.id
+        WHERE t.category_id = ?
+        GROUP BY t.id
+        ORDER BY cnt DESC, t.name ASC
+        LIMIT 30`,
+      [c.id],
+    )
+    const cnt = await one('SELECT COUNT(*) AS total FROM posts WHERE category_id = ?', [c.id])
+    return OK(res, {
+      category: { ...c, post_count: Number(cnt.total) },
+      tags: tags.map((t) => ({ name: t.name, count: Number(t.cnt) })),
+    })
+  } catch (e) {
+    console.error('[forum.categoryDetail]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
 /** 帖子列表 ?category=slug&page=1&sort=new|active|hot */
 r.get('/posts', async (req, res) => {
   try {
@@ -48,6 +76,7 @@ r.get('/posts', async (req, res) => {
     const size = Math.min(50, Math.max(1, Number(req.query.size) || 20))
     const offset = (page - 1) * size
     const category = String(req.query.category || '').trim()
+    const tag = String(req.query.tag || '').trim()
     const sortIn = String(req.query.sort || 'new')
     const sort = ['new', 'active', 'hot'].includes(sortIn) ? sortIn : 'new'
 
@@ -56,6 +85,12 @@ r.get('/posts', async (req, res) => {
     if (category) {
       where.push('c.slug = ?')
       params.push(category)
+    }
+    if (tag) {
+      where.push(
+        'EXISTS (SELECT 1 FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id AND t.name = ?)',
+      )
+      params.push(tag)
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const orderSql =
@@ -68,7 +103,10 @@ r.get('/posts', async (req, res) => {
     const rows = await q(
       `SELECT p.id, p.title, p.content, p.views, p.reply_count, p.created_at, p.last_reply_at,
               p.user_id, u.username, u.avatar,
-              c.id AS category_id, c.name AS category_name, c.slug AS category_slug
+              c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
+              (SELECT GROUP_CONCAT(t2.name ORDER BY t2.name SEPARATOR ',')
+                 FROM post_tags pt2 JOIN tags t2 ON t2.id = pt2.tag_id
+                WHERE pt2.post_id = p.id) AS tags
          FROM posts p
          JOIN users u ON u.id = p.user_id
          JOIN categories c ON c.id = p.category_id
@@ -92,6 +130,7 @@ r.get('/posts', async (req, res) => {
         replyCount: p.reply_count,
         createdAt: p.created_at,
         lastReplyAt: p.last_reply_at,
+        tags: p.tags || '',
         author: authorOf(p),
         category: { id: p.category_id, name: p.category_name, slug: p.category_slug },
       })),
@@ -122,12 +161,28 @@ r.post('/posts', async (req, res) => {
     const cat = await one('SELECT id FROM categories WHERE id=?', [categoryId])
     if (!cat) return FAIL(res, '板块不存在')
 
+    const rawTags = Array.isArray(req.body?.tags) ? req.body.tags : []
+    const tags = [...new Set(rawTags.map((t) => String(t).trim()).filter(Boolean))].slice(0, 3)
+    for (const name of tags) {
+      if (name.length > 16) return FAIL(res, '单个标签最多 16 字')
+      if (tags.length > 3) return FAIL(res, '最多 3 个标签')
+    }
+
     const ins = await q('INSERT INTO posts (category_id, user_id, title, content) VALUES (?,?,?,?)', [
       categoryId,
       uid,
       title,
       content,
     ])
+    for (const name of tags) {
+      await q('INSERT INTO tags (category_id, name) VALUES (?,?) ON DUPLICATE KEY UPDATE id = id', [
+        categoryId,
+        name,
+      ])
+      const tg = await one('SELECT id FROM tags WHERE category_id=? AND name=?', [categoryId, name])
+      if (tg) await q('INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES (?,?)', [ins.insertId, tg.id])
+    }
+
     return OK(res, { id: ins.insertId }, '发布成功')
   } catch (e) {
     console.error('[forum.createPost]', e)

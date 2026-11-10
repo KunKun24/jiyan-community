@@ -34,7 +34,7 @@ onMounted(async () => {
         v-for="c in cats"
         :key="c.id"
         class="card"
-        :to="{ path: '/forum', query: { category: c.slug } }"
+        :to="`/c/${c.slug}`"
       >
         <div class="card-top">
           <h2>{{ c.name }}</h2>

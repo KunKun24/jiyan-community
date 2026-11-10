@@ -12,7 +12,7 @@ interface Category {
 
 const router = useRouter()
 const categories = ref<Category[]>([])
-const form = reactive({ categoryId: 0, title: '', content: '' })
+const form = reactive({ categoryId: 0, title: '', content: '', tags: '' })
 const error = ref('')
 const sending = ref(false)
 
@@ -33,7 +33,17 @@ async function submit() {
   }
   error.value = ''
   sending.value = true
-  const r = await post<{ id: number }>('/api/posts', { ...form })
+  const tags = form.tags
+    .split(/[,，\s]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+  const r = await post<{ id: number }>('/api/posts', {
+    categoryId: form.categoryId,
+    title: form.title,
+    content: form.content,
+    tags,
+  })
   sending.value = false
   if (!r.ok) {
     error.value = r.msg
@@ -85,6 +95,18 @@ async function submit() {
           maxlength="20000"
           placeholder="慢慢写，不用急。"
         ></textarea>
+      </div>
+
+      <div class="field">
+        <label for="tags">标签</label>
+        <input
+          id="tags"
+          v-model="form.tags"
+          class="input"
+          type="text"
+          placeholder="用逗号隔开，最多 3 个，比如：求助, 分享"
+        />
+        <small class="hint">标签会出现在板块页顶部，方便别人找到同类帖子。</small>
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
@@ -210,6 +232,11 @@ async function submit() {
 }
 .btn-ghost:hover {
   background: #f4f1ec;
+}
+
+.hint {
+  font-size: 12px;
+  color: #a8a196;
 }
 
 .error {
