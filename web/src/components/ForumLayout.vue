@@ -53,6 +53,11 @@ async function onLogout() {
               </svg>
               <i v-if="unread" class="badge-dot">{{ unread > 99 ? '99+' : unread }}</i>
             </RouterLink>
+            <RouterLink v-if="store.user?.role === 'admin'" class="icon-btn" to="/admin" title="管理后台" aria-label="管理后台">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7">
+                <path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z" />
+              </svg>
+            </RouterLink>
             <RouterLink class="btn-primary" to="/new">发帖</RouterLink>
             <RouterLink class="userbox" to="/me" title="个人资料">
               <img v-if="store.user.avatar" class="avatar-img" :src="store.user.avatar" alt="" />

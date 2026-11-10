@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from './views/Home.vue'
+import { loadMe, store } from './store'
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: Home },
@@ -27,6 +28,19 @@ export default createRouter({
         { path: 'settings', name: 'settings', component: () => import('./views/Settings.vue') },
       ],
     },
+    {
+      path: '/admin',
+      component: () => import('./components/AdminLayout.vue'),
+      meta: { admin: true },
+      children: [
+        { path: '', name: 'admin-home', component: () => import('./views/admin/AdminHome.vue') },
+        { path: 'posts', name: 'admin-posts', component: () => import('./views/admin/AdminPosts.vue') },
+        { path: 'reports', name: 'admin-reports', component: () => import('./views/admin/AdminReports.vue') },
+        { path: 'users', name: 'admin-users', component: () => import('./views/admin/AdminUsers.vue') },
+        { path: 'notices', name: 'admin-notices', component: () => import('./views/admin/AdminNotices.vue') },
+        { path: 'categories', name: 'admin-categories', component: () => import('./views/admin/AdminCategories.vue') },
+      ],
+    },
   ],
   scrollBehavior(to, _from, saved) {
     if (to.hash) return { el: to.hash, behavior: 'smooth' }
@@ -34,3 +48,13 @@ export default createRouter({
     return { top: 0 }
   },
 })
+
+router.beforeEach(async (to) => {
+  if (!to.meta.admin) return true
+  if (!store.loaded) await loadMe()
+  if (!store.user) return { path: '/login', query: { redirect: to.fullPath } }
+  if (store.user.role !== 'admin') return '/forum'
+  return true
+})
+
+export default router

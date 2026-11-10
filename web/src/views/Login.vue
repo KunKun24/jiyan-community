@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '../components/AuthLayout.vue'
 import { post } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 
 const form = reactive({ account: '', password: '' })
 const error = ref('')
@@ -19,7 +20,8 @@ async function submit() {
     error.value = r.msg
     return
   }
-  router.push('/forum')
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/forum'
+  router.push(redirect)
 }
 </script>
 
