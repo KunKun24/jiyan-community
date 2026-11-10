@@ -81,9 +81,7 @@ watch(slug, async () => {
   <div v-else class="cat">
     <header class="head">
       <p class="crumb">
-        <RouterLink to="/categories">板块</RouterLink>
-        <span class="sep">/</span>
-        <span>{{ category?.name }}</span>
+        <RouterLink to="/categories">← 全部板块</RouterLink>
       </p>
       <h1>{{ category?.name }}</h1>
       <p class="desc">{{ category?.description || '这个板块还没有简介。' }}</p>
@@ -153,11 +151,6 @@ watch(slug, async () => {
 
 .crumb a:hover {
   color: var(--ink);
-}
-
-.sep {
-  margin: 0 7px;
-  color: #c9c3b7;
 }
 
 .head h1 {
