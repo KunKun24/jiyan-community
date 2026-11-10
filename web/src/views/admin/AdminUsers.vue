@@ -19,11 +19,33 @@
             <td class="actions">
               <button class="admin-btn ghost" @click="toggleStatus(u)">{{ u.status === 1 ? '封禁' : '解封' }}</button>
               <button class="admin-btn ghost" @click="toggleRole(u)">{{ u.role === 'admin' ? '取消管理员' : '设为管理员' }}</button>
+              <button class="admin-btn ghost" @click="openEdit(u)">编辑</button>
             </td>
           </tr>
           <tr v-if="!items.length"><td colspan="7" class="admin-empty">没有账号</td></tr>
         </tbody>
       </table>
+    </div>
+    <div v-if="editing" class="am-mask" @click.self="editing = null">
+      <div class="am-modal">
+        <h3>编辑账号</h3>
+        <div class="admin-toolbar" style="flex-direction:column;align-items:stretch;gap:10px">
+          <label style="font-size:13px;color:var(--muted)">用户名
+            <input v-model="form.username" class="admin-input" style="width:100%;margin-top:4px" />
+          </label>
+          <label style="font-size:13px;color:var(--muted)">贡献值（等级随贡献值变化）
+            <input v-model.number="form.points" type="number" min="0" class="admin-input" style="width:100%;margin-top:4px" />
+          </label>
+          <label style="font-size:13px;color:var(--muted)">新密码（留空不改）
+            <input v-model="form.password" type="text" class="admin-input" style="width:100%;margin-top:4px" placeholder="至少 6 位" />
+          </label>
+          <p v-if="editError" style="color:#b3261e;font-size:13px">{{ editError }}</p>
+        </div>
+        <div class="am-acts">
+          <button class="admin-btn ghost" @click="editing = null">取消</button>
+          <button class="admin-btn" @click="saveEdit">保存</button>
+        </div>
+      </div>
     </div>
     <div class="admin-pager">
       <span>第 {{ page }} / {{ pages }} 页</span>
@@ -37,7 +59,7 @@
 import { onMounted, ref } from 'vue'
 import { get, patch } from '../../api'
 
-interface Item { id: number; username: string; email: string; role: string; status: number; post_count: number; created_at: string }
+interface Item { id: number; username: string; email: string; role: string; status: number; points: number; post_count: number; created_at: string }
 
 const items = ref<Item[]>([])
 const total = ref(0)
@@ -63,6 +85,27 @@ async function toggleStatus(u: Item) {
   const r = await patch(`/api/admin/users/${u.id}`, { status: next })
   if (r.ok) u.status = next
 }
+const editing = ref<Item | null>(null)
+const form = ref({ username: '', points: 0, password: '' })
+const editError = ref('')
+
+function openEdit(u: Item) {
+  editing.value = u
+  form.value = { username: u.username, points: u.points ?? 0, password: '' }
+  editError.value = ''
+}
+async function saveEdit() {
+  if (!editing.value) return
+  editError.value = ''
+  const body: Record<string, unknown> = { username: form.value.username }
+  body.points = Number(form.value.points) || 0
+  if (form.value.password) body.password = form.value.password
+  const r = await patch(`/api/admin/users/${editing.value.id}`, body)
+  if (!r.ok) { editError.value = r.msg; return }
+  editing.value = null
+  load()
+}
+
 async function toggleRole(u: Item) {
   const next = u.role === 'admin' ? 'user' : 'admin'
   const r = await patch(`/api/admin/users/${u.id}`, { role: next })

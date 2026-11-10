@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { one, q } from '../db.js'
 import { sessionUser } from '../session.js'
+import { hashPassword } from '../password.js'
 
 const r = Router()
 const OK = (res, data = {}, msg = 'ok') => res.json({ ok: true, msg, data })
@@ -268,8 +269,25 @@ r.patch('/admin/users/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
     if (!id) return FAIL(res, '参数错误')
-    if (id === req.admin.id) return FAIL(res, '不能改自己的权限或状态')
     const body = req.body || {}
+    if (id === req.admin.id && ('status' in body || 'role' in body)) return FAIL(res, '不能改自己的权限或状态')
+    if ('username' in body) {
+      const name = String(body.username || '').trim()
+      if (!/^[\p{L}\p{N}_-]{2,32}$/u.test(name)) return FAIL(res, '用户名需 2-32 位，可用中英文、数字、下划线')
+      const dup = await one('SELECT id FROM users WHERE username=? AND id<>?', [name, id])
+      if (dup) return FAIL(res, '这个用户名已被占用')
+      await q('UPDATE users SET username=? WHERE id=?', [name, id])
+    }
+    if ('points' in body) {
+      const pts = Number(body.points)
+      if (!Number.isFinite(pts) || pts < 0 || pts > 1000000) return FAIL(res, '贡献值不合法')
+      await q('UPDATE users SET points=? WHERE id=?', [Math.floor(pts), id])
+    }
+    if (body.password) {
+      const pw = String(body.password)
+      if (pw.length < 6) return FAIL(res, '密码至少 6 位')
+      await q('UPDATE users SET password_hash=? WHERE id=?', [hashPassword(pw), id])
+    }
     if ('status' in body) {
       const st = Number(body.status)
       if (![0, 1].includes(st)) return FAIL(res, '状态不合法')
