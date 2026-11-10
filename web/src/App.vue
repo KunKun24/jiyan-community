@@ -132,7 +132,7 @@ onMounted(() => {
     <header class="nav">
       <div class="nav-inner">
         <a class="brand" href="/">
-          <img class="brand-logo" src="/logo.svg" alt="极验社区" />
+          <img class="brand-logo" src="/logo.png" alt="极验社区" />
           <span>极验社区</span>
         </a>
         <nav class="nav-links">
@@ -170,7 +170,7 @@ onMounted(() => {
           </div>
           <div class="browser-body">
             <div class="mock-head">
-              <img class="mock-logo" src="/logo.svg" alt="" />
+              <img class="mock-logo" src="/logo.png" alt="" />
               <span class="mock-name">极验社区</span>
               <span class="mock-search">搜索讨论…</span>
             </div>
@@ -306,7 +306,7 @@ onMounted(() => {
       <div class="footer-inner">
         <div class="footer-brand-col">
           <div class="brand">
-            <img class="brand-logo" src="/logo.svg" alt="极验社区" />
+            <img class="brand-logo" src="/logo.png" alt="极验社区" />
             <span>极验社区</span>
           </div>
           <p>一个干净、专注内容的开源社区。</p>
