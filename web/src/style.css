@@ -206,3 +206,7 @@ img {
 .am-modal { background: #fff; border-radius: 12px; width: min(520px, 100%); padding: 22px; box-shadow: 0 18px 50px rgba(22,21,15,.18); }
 .am-modal h3 { font-size: 16px; margin-bottom: 14px; }
 .am-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+.auth-agree { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #6e6a62; line-height: 1.6; margin: 4px 0 2px; cursor: pointer; }
+.auth-agree input { margin-top: 3px; accent-color: #3e5c4b; width: 15px; height: 15px; flex: none; }
+.auth-agree a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }

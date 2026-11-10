@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { get } from '../api'
 import { timeAgo } from '../format'
+import BannerCarousel from '../components/BannerCarousel.vue'
 
 interface Category {
   id: number
@@ -67,6 +68,7 @@ watch(
 
 <template>
   <div class="forum">
+    <BannerCarousel />
     <header class="feed-head">
       <h1>{{ heading }}</h1>
       <p>{{ subheading }}</p>

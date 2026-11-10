@@ -13,6 +13,8 @@ const loading = ref(false)
 
 async function submit() {
   error.value = ''
+  if (!form.account.trim()) { error.value = '请先填写用户名或邮箱'; return }
+  if (!form.password) { error.value = '请先填写密码'; return }
   loading.value = true
   const r = await post('/api/auth/login', { ...form })
   loading.value = false
@@ -52,7 +54,7 @@ async function submit() {
         />
       </div>
 
-      <p v-if="error" class="auth-error">{{ error }}</p>
+      <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
 
       <button class="auth-submit" type="submit" :disabled="loading">
         {{ loading ? '登录中…' : '登录' }}

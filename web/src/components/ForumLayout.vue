@@ -5,6 +5,7 @@ import AppTabs from './AppTabs.vue'
 import { store, logout } from '../store'
 import { initial } from '../format'
 import { get } from '../api'
+import AnnouncementModal from './AnnouncementModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -81,6 +82,7 @@ async function onLogout() {
         </Transition>
       </RouterView>
     </main>
+    <AnnouncementModal />
   </div>
 </template>
 

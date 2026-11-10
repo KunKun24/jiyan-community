@@ -139,6 +139,7 @@ r.get('/admin/reports', async (req, res) => {
       `SELECT r.*, ru.username AS reporter_name, p.title AS post_title,
               (SELECT username FROM users WHERE id=(SELECT user_id FROM posts WHERE id=r.post_id)) AS post_author,
               (SELECT content FROM replies WHERE id=r.target_id) AS comment_content,
+              (SELECT username FROM users WHERE id=r.target_id) AS target_user,
               (SELECT username FROM users WHERE id=(SELECT user_id FROM replies WHERE id=r.target_id)) AS comment_author
          FROM reports r
          LEFT JOIN users ru ON ru.id=r.reporter_id
@@ -236,6 +237,89 @@ r.patch('/admin/users/:id', async (req, res) => {
     return OK(res, {}, '已更新')
   } catch (e) {
     console.error('[admin.patchUser]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 趋势：注册 / 发帖 / 回复，按天 */
+r.get('/admin/trends', async (req, res) => {
+  try {
+    const days = Math.min(30, Math.max(7, Number(req.query.days) || 14))
+    const rows = await q(
+      `WITH RECURSIVE days AS (
+         SELECT CURDATE() - INTERVAL ? DAY AS d
+         UNION ALL SELECT d + INTERVAL 1 DAY FROM days WHERE d < CURDATE()
+       )
+       SELECT DATE_FORMAT(d, '%Y-%m-%d') AS day,
+         (SELECT COUNT(*) FROM users u WHERE DATE(u.created_at)=d) AS users,
+         (SELECT COUNT(*) FROM posts p WHERE DATE(p.created_at)=d) AS posts,
+         (SELECT COUNT(*) FROM replies r WHERE DATE(r.created_at)=d) AS replies
+       FROM days`,
+      [days - 1],
+    )
+    return OK(res, { days, items: rows })
+  } catch (e) {
+    console.error('[admin.trends]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/** 轮播图管理 */
+r.get('/admin/banners', async (_req, res) => {
+  try {
+    const rows = await q('SELECT * FROM banners ORDER BY sort ASC, id DESC')
+    return OK(res, { items: rows })
+  } catch (e) {
+    console.error('[admin.banners]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.post('/admin/banners', async (req, res) => {
+  try {
+    const image = String(req.body?.image || '').trim()
+    const link = String(req.body?.link || '').trim().slice(0, 255)
+    const title = String(req.body?.title || '').trim().slice(0, 100)
+    const sort = Number(req.body?.sort) || 0
+    const enabled = req.body?.enabled === false ? 0 : 1
+    if (!image) return FAIL(res, '先上传一张图')
+    if (link && !/^https?:\/\//i.test(link)) return FAIL(res, '跳转地址要以 http:// 或 https:// 开头')
+    const ins = await q('INSERT INTO banners (image, link, title, sort, enabled) VALUES (?,?,?,?,?)', [
+      image, link, title, sort, enabled,
+    ])
+    return OK(res, { id: ins.insertId }, '已添加')
+  } catch (e) {
+    console.error('[admin.createBanner]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.patch('/admin/banners/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const image = String(req.body?.image || '').trim()
+    const link = String(req.body?.link || '').trim().slice(0, 255)
+    const title = String(req.body?.title || '').trim().slice(0, 100)
+    const sort = Number(req.body?.sort) || 0
+    const enabled = req.body?.enabled === false ? 0 : 1
+    if (!image) return FAIL(res, '图片不能为空')
+    if (link && !/^https?:\/\//i.test(link)) return FAIL(res, '跳转地址要以 http:// 或 https:// 开头')
+    await q('UPDATE banners SET image=?, link=?, title=?, sort=?, enabled=? WHERE id=?', [
+      image, link, title, sort, enabled, id,
+    ])
+    return OK(res, {}, '已保存')
+  } catch (e) {
+    console.error('[admin.patchBanner]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+r.delete('/admin/banners/:id', async (req, res) => {
+  try {
+    await q('DELETE FROM banners WHERE id=?', [Number(req.params.id)])
+    return OK(res, {}, '已删除')
+  } catch (e) {
+    console.error('[admin.deleteBanner]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })

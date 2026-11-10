@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { clientIp } from '../ratelimit.js'
 import { one, q } from '../db.js'
 import sanitizeHtml from 'sanitize-html'
 import { sessionUser } from '../session.js'
@@ -246,7 +247,10 @@ r.get('/posts/:id', async (req, res) => {
     if (p.status === 'private' && p.user_id !== s2?.uid) {
       return FAIL(res, '该帖子可能已被版主私密或删除', 404)
     }
-    await q('UPDATE posts SET views = views + 1 WHERE id = ?', [id])
+    const viewerKey = s2?.uid ? `u:${s2.uid}` : `ip:${clientIp(req)}`
+    const seen = await q('INSERT IGNORE INTO post_views (post_id, viewer) VALUES (?,?)', [id, viewerKey])
+    const counted = Number(seen.affectedRows) === 1
+    if (counted) await q('UPDATE posts SET views = views + 1 WHERE id = ?', [id])
 
     const tagRows = await q(
       `SELECT t.name FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = ? ORDER BY t.id`,
@@ -287,7 +291,7 @@ r.get('/posts/:id', async (req, res) => {
         title: p.title,
         content: p.content,
         contentHtml: p.content_html || '',
-        views: p.views + 1,
+        views: Number(p.views) + (counted ? 1 : 0),
         replyCount: replies.length,
         createdAt: p.created_at,
         likeCount: Number(p.like_count || 0),

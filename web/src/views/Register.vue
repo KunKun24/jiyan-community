@@ -15,6 +15,7 @@ const form = reactive({
 })
 
 const error = ref('')
+const agree = ref(false)
 const loading = ref(false)
 const sending = ref(false)
 const countdown = ref(0)
@@ -45,6 +46,13 @@ async function sendCode() {
 
 async function submit() {
   error.value = ''
+  if (!form.username.trim()) { error.value = '请先填写用户名'; return }
+  if (!form.email.trim()) { error.value = '请先填写邮箱'; return }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { error.value = '邮箱格式看起来不对'; return }
+  if (!form.code.trim()) { error.value = '请先填写邮箱验证码'; return }
+  if (form.password.length < 6) { error.value = '密码至少 6 位'; return }
+  if (form.password !== form.password2) { error.value = '两次输入的密码不一致'; return }
+  if (!agree.value) { error.value = '请先阅读并同意用户协议和免责声明'; return }
   loading.value = true
   const r = await post<{ user: unknown }>('/api/auth/register', { ...form })
   loading.value = false
@@ -128,7 +136,12 @@ onBeforeUnmount(() => window.clearInterval(timer))
         />
       </div>
 
-      <p v-if="error" class="auth-error">{{ error }}</p>
+      <label class="auth-agree">
+        <input v-model="agree" type="checkbox" />
+        <span>我已阅读并同意 <RouterLink to="/terms" target="_blank">《用户协议》</RouterLink> 和 <RouterLink to="/disclaimer" target="_blank">《免责声明》</RouterLink></span>
+      </label>
+
+      <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
 
       <button class="auth-submit" type="submit" :disabled="loading">
         {{ loading ? '创建中…' : '创建账号' }}

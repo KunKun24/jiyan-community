@@ -9,6 +9,8 @@ const router = createRouter({
     { path: '/login', name: 'login', component: () => import('./views/Login.vue') },
     { path: '/register', name: 'register', component: () => import('./views/Register.vue') },
     { path: '/reset', name: 'reset', component: () => import('./views/Reset.vue') },
+    { path: '/terms', name: 'terms', component: () => import('./views/Terms.vue') },
+    { path: '/disclaimer', name: 'disclaimer', component: () => import('./views/Disclaimer.vue') },
     {
       path: '/',
       component: () => import('./components/ForumLayout.vue'),
@@ -37,6 +39,7 @@ const router = createRouter({
         { path: 'posts', name: 'admin-posts', component: () => import('./views/admin/AdminPosts.vue') },
         { path: 'reports', name: 'admin-reports', component: () => import('./views/admin/AdminReports.vue') },
         { path: 'users', name: 'admin-users', component: () => import('./views/admin/AdminUsers.vue') },
+        { path: 'banners', name: 'admin-banners', component: () => import('./views/admin/AdminBanners.vue') },
         { path: 'notices', name: 'admin-notices', component: () => import('./views/admin/AdminNotices.vue') },
         { path: 'categories', name: 'admin-categories', component: () => import('./views/admin/AdminCategories.vue') },
       ],

@@ -104,7 +104,8 @@ r.post('/notifications/read', async (req, res) => {
 r.post('/reports', async (req, res) => {
   try {
     const uid = requireLoginOrAnon(req)
-    const targetType = req.body?.targetType === 'comment' ? 'comment' : 'post'
+    const tt = String(req.body?.targetType || 'post')
+    const targetType = ['post', 'comment', 'user'].includes(tt) ? tt : 'post'
     const reason = String(req.body?.reason || '').trim()
     const contact = String(req.body?.contact || '').trim().slice(0, 120)
     const postId = Number(req.body?.postId || 0) || null
@@ -114,12 +115,17 @@ r.post('/reports', async (req, res) => {
     if (reason.length < 5) return FAIL(res, '请把原因写清楚一点（至少 5 个字）')
     if (reason.length > 500) return FAIL(res, '原因太长了')
     if (targetType === 'comment' && !postId) return FAIL(res, '参数错误')
+    if (targetType === 'user' && !uid) return FAIL(res, '登录后才能举报用户')
 
     let done = 0
     for (const tid of ids.slice(0, 50)) {
       if (targetType === 'post') {
         const p = await one('SELECT id FROM posts WHERE id=?', [tid])
         if (!p) continue
+      } else if (targetType === 'user') {
+        if (tid === uid) continue
+        const u = await one('SELECT id FROM users WHERE id=?', [tid])
+        if (!u) continue
       } else {
         const c = await one('SELECT id FROM replies WHERE id=?', [tid])
         if (!c) continue
@@ -134,6 +140,19 @@ r.post('/reports', async (req, res) => {
     return OK(res, { count: done }, '已收到举报，谢谢')
   } catch (e) {
     console.error('[social.report]', e)
+    return FAIL(res, '服务器错误', 500)
+  }
+})
+
+/* ---------------- 轮播图（公开） ---------------- */
+r.get('/banners', async (_req, res) => {
+  try {
+    const rows = await q(
+      'SELECT id, image, link, title FROM banners WHERE enabled=1 ORDER BY sort ASC, id DESC LIMIT 10',
+    )
+    return OK(res, { items: rows })
+  } catch (e) {
+    console.error('[social.banners]', e)
     return FAIL(res, '服务器错误', 500)
   }
 })

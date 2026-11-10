@@ -8,12 +8,15 @@
     <div v-for="r in items" :key="r.id" class="admin-card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
-          <span class="admin-badge warn">{{ r.target_type === 'post' ? '帖子' : '评论' }}</span>
+          <span class="admin-badge warn">{{ r.target_type === 'post' ? '帖子' : r.target_type === 'user' ? '用户' : '评论' }}</span>
           <span class="admin-badge">{{ r.created_at.slice(5, 16) }}</span>
         </div>
-        <RouterLink v-if="r.post_id" :to="`/post/${r.post_id}`" style="font-size:13px">查看原文 →</RouterLink>
+        <RouterLink v-if="r.target_type === 'user'" :to="`/u/${r.target_id}`" style="font-size:13px">查看用户 →</RouterLink>
+        <RouterLink v-else-if="r.post_id" :to="`/post/${r.post_id}`" style="font-size:13px">查看原文 →</RouterLink>
       </div>
-      <p style="margin:10px 0 4px;font-weight:600">{{ r.post_title || '（帖子已不存在）' }}</p>
+      <p style="margin:10px 0 4px;font-weight:600">
+        {{ r.target_type === 'user' ? `被举报用户：${r.target_user || '（已不存在）'}` : r.post_title || '（帖子已不存在）' }}
+      </p>
       <p v-if="r.target_type === 'comment'" style="color:var(--muted);font-size:13px">被举报评论：{{ r.comment_content }}</p>
       <p style="margin-top:8px;font-size:13.5px"><b>原因：</b>{{ r.reason }}</p>
       <p v-if="r.contact" style="font-size:13px;color:var(--muted)">联系方式：{{ r.contact }}</p>
@@ -34,7 +37,7 @@
 import { onMounted, ref } from 'vue'
 import { get, post } from '../../api'
 
-interface Report { id: number; target_type: string; target_id: number; post_id: number; reason: string; contact: string; created_at: string; reporter_name: string; post_title: string; post_author: string; comment_content: string; comment_author: string; confirmDelete?: boolean; confirmBan?: boolean }
+interface Report { id: number; target_type: string; target_id: number; post_id: number; reason: string; contact: string; created_at: string; reporter_name: string; post_title: string; post_author: string; comment_content: string; comment_author: string; target_user: string; confirmDelete?: boolean; confirmBan?: boolean }
 
 const tabs = [
   { k: 'pending', label: '待处理' },

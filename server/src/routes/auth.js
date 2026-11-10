@@ -5,6 +5,7 @@ import { issueCode, consumeCode } from '../codes.js'
 import { sendMail } from '../mailer.js'
 import { resetMail } from '../mail-template.js'
 import { signSession, sessionUser, setSessionCookie, clearSessionCookie } from '../session.js'
+import { clientIp, rateLimit } from '../ratelimit.js'
 
 const r = Router()
 
@@ -26,14 +27,11 @@ function publicUser(u) {
   }
 }
 
-function clientIp(req) {
-  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-  return fwd || req.ip || ''
-}
-
 /** 发送验证码：register | reset */
 r.post('/send-code', async (req, res) => {
   try {
+    const rl = await rateLimit(`rl:code:${clientIp(req)}`, 10, 3600)
+    if (!rl.ok) return FAIL(res, '发得太频繁了，歇一小时再试', 429)
     const email = String(req.body?.email || '').trim().toLowerCase()
     const purpose = String(req.body?.purpose || 'register')
     if (!EMAIL_RE.test(email)) return FAIL(res, '邮箱格式不正确')
@@ -55,6 +53,8 @@ r.post('/send-code', async (req, res) => {
 /** 注册 */
 r.post('/register', async (req, res) => {
   try {
+    const rl = await rateLimit(`rl:reg:${clientIp(req)}`, 5, 3600)
+    if (!rl.ok) return FAIL(res, '今天注册得有点多，歇一小时再试', 429)
     const username = String(req.body?.username || '').trim()
     const email = String(req.body?.email || '').trim().toLowerCase()
     const password = String(req.body?.password || '')
@@ -90,6 +90,8 @@ r.post('/register', async (req, res) => {
 /** 登录：账号可以是用户名或邮箱 */
 r.post('/login', async (req, res) => {
   try {
+    const rl = await rateLimit(`rl:login:${clientIp(req)}`, 30, 900)
+    if (!rl.ok) return FAIL(res, '尝试太频繁了，等 15 分钟再试', 429)
     const account = String(req.body?.account || '').trim()
     const password = String(req.body?.password || '')
     if (!account || !password) return FAIL(res, '请输入账号和密码')

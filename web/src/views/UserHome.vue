@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { get } from '../api'
+import { get, post } from '../api'
+import { store } from '../store'
 import { fmtNum, timeAgo, initial } from '../format'
 
 interface HomeUser {
@@ -35,6 +36,30 @@ const error = ref('')
 const user = ref<HomeUser | null>(null)
 const stats = ref({ posts: 0, replies: 0, likes: 0 })
 const posts = ref<HomePost[]>([])
+const reportOpen = ref(false)
+const reportReason = ref('')
+const reportContact = ref('')
+const reportErr = ref('')
+const reportSending = ref(false)
+
+async function submitReport() {
+  if (!user.value) return
+  reportErr.value = ''
+  if (reportReason.value.trim().length < 5) { reportErr.value = '请把原因写清楚一点（至少 5 个字）'; return }
+  reportSending.value = true
+  const r = await post('/api/reports', {
+    targetType: 'user',
+    targetId: user.value.id,
+    reason: reportReason.value.trim(),
+    contact: reportContact.value.trim(),
+  })
+  reportSending.value = false
+  if (!r.ok) { reportErr.value = r.msg; return }
+  reportOpen.value = false
+  reportReason.value = ''
+  reportContact.value = ''
+  alert('已收到，管理员会看')
+}
 
 async function load() {
   loading.value = true
@@ -82,6 +107,7 @@ watch(() => route.params.id, load)
             </p>
           </div>
           <RouterLink v-if="user.isMe" class="btn-ghost" to="/me">这是我的主页 · 去改资料</RouterLink>
+          <button v-else-if="store.user" class="btn-ghost" type="button" @click="reportOpen = true">举报</button>
         </div>
 
         <p v-if="user.bio" class="bio">{{ user.bio }}</p>
@@ -124,6 +150,19 @@ watch(() => route.params.id, load)
         </RouterLink>
       </section>
     </template>
+
+    <div v-if="reportOpen && user" class="rp-mask" @click.self="reportOpen = false">
+      <div class="rp-card">
+        <h3>举报 {{ user.username }}</h3>
+        <textarea v-model="reportReason" rows="4" placeholder="发生了什么？至少 5 个字"></textarea>
+        <input v-model="reportContact" placeholder="联系方式（选填，方便管理员联系你）" />
+        <p v-if="reportErr" class="rp-err">{{ reportErr }}</p>
+        <div class="rp-acts">
+          <button class="btn-ghost" type="button" @click="reportOpen = false">取消</button>
+          <button class="rp-primary" type="button" :disabled="reportSending" @click="submitReport">{{ reportSending ? '提交中…' : '提交举报' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -178,4 +217,15 @@ watch(() => route.params.id, load)
   .hero-top { flex-wrap: wrap; }
   .stats { gap: 18px; }
 }
+</style>
+<style scoped>
+.rp-mask { position: fixed; inset: 0; z-index: 90; background: rgba(38,34,28,.3); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.rp-card { background: #fff; border-radius: 14px; width: min(440px, 100%); padding: 22px; border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(38,34,28,.2); }
+.rp-card h3 { font-size: 16px; margin-bottom: 12px; }
+.rp-card textarea, .rp-card input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 10px; }
+.rp-card textarea:focus, .rp-card input:focus { border-color: var(--accent); }
+.rp-err { color: #b4432f; font-size: 13px; margin-bottom: 8px; }
+.rp-acts { display: flex; justify-content: flex-end; gap: 8px; }
+.rp-primary { height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13.5px; cursor: pointer; }
+.rp-primary:disabled { opacity: .6; }
 </style>
