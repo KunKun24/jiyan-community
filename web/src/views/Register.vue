@@ -8,7 +8,7 @@ import { store } from '../store'
 const router = useRouter()
 const route = useRoute()
 
-const invite = String(route.query.invite || '').trim()
+const invite = ref(String(route.query.invite || '').trim().toUpperCase())
 const form = reactive({
   username: '',
   email: '',
@@ -57,7 +57,7 @@ async function submit() {
   if (form.password !== form.password2) { error.value = '两次输入的密码不一致'; return }
   if (!agree.value) { error.value = '请先阅读并同意用户协议和免责声明'; return }
   loading.value = true
-  const r = await post<{ user: User }>('/api/auth/register', { ...form, invite })
+  const r = await post<{ user: User }>('/api/auth/register', { ...form, invite: invite.value.trim().toUpperCase() })
   loading.value = false
   if (!r.ok) {
     error.value = r.msg
@@ -140,6 +140,20 @@ onBeforeUnmount(() => window.clearInterval(timer))
           type="password"
           autocomplete="new-password"
           placeholder="再输入一次"
+        />
+      </div>
+
+      <div class="auth-field">
+        <label class="auth-label" for="invite">邀请码 <span class="opt">选填</span></label>
+        <input
+          id="invite"
+          v-model="invite"
+          class="auth-input"
+          type="text"
+          maxlength="8"
+          autocomplete="off"
+          placeholder="有朋友邀请就填他的码"
+          @input="invite = invite.toUpperCase()"
         />
       </div>
 

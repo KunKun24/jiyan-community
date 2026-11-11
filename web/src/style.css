@@ -53,6 +53,7 @@ img {
   display: grid;
   gap: 7px;
 }
+.auth-label .opt { font-size: 11px; font-weight: 400; color: #a8a196; margin-left: 4px; }
 .auth-label {
   font-size: 13px;
   color: var(--muted);
