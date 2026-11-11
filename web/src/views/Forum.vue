@@ -34,6 +34,10 @@ const route = useRoute()
 const categories = ref<Category[]>([])
 const posts = ref<PostItem[]>([])
 const total = ref(0)
+const page = ref(1)
+const SIZE = 20
+const loadingMore = ref(false)
+const hasMore = computed(() => posts.value.length < total.value)
 const chipsRef = ref<HTMLElement | null>(null)
 let dragStartX = 0
 let dragStartLeft = 0
@@ -92,16 +96,29 @@ async function loadCategories() {
   if (r.ok) categories.value = r.data?.categories ?? []
 }
 
-async function loadPosts() {
-  loading.value = true
-  loadError.value = ''
-  armTimeout()
+async function loadPosts(more = false) {
+  if (more && (loadingMore.value || !hasMore.value)) return
+  if (more) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    loadError.value = ''
+    armTimeout()
+  }
+  const nextPage = more ? page.value + 1 : 1
   try {
-    const qs = currentSlug.value ? `?category=${encodeURIComponent(currentSlug.value)}` : ''
-    const r = await get<{ posts: PostItem[]; total: number }>(`/api/posts${qs}`)
+    const params = new URLSearchParams()
+    if (currentSlug.value) params.set('category', currentSlug.value)
+    params.set('page', String(nextPage))
+    params.set('size', String(SIZE))
+    const r = await get<{ posts: PostItem[]; total: number }>(`/api/posts?${params.toString()}`)
     if (r.ok) {
-      posts.value = r.data?.posts ?? []
+      const list = r.data?.posts ?? []
+      posts.value = more ? [...posts.value, ...list] : list
       total.value = r.data?.total ?? 0
+      page.value = nextPage
+    } else if (more) {
+      loadError.value = r.msg || '加载更多失败'
     } else {
       loadError.value = r.msg || '帖子加载失败'
     }
@@ -109,6 +126,7 @@ async function loadPosts() {
     loadError.value = '加载失败，请检查网络后重试。'
   } finally {
     window.clearTimeout(loadTimer)
+    loadingMore.value = false
     loading.value = false
   }
 }
@@ -209,6 +227,13 @@ watch(
           <span>{{ p.replyCount }} 回复</span>
         </div>
       </article>
+
+      <div v-if="posts.length" class="more-wrap">
+        <button v-if="hasMore" class="more-btn" type="button" :disabled="loadingMore" @click="loadPosts(true)">
+          {{ loadingMore ? '加载中…' : `加载更多（还有 ${total - posts.length} 条）` }}
+        </button>
+        <p v-else class="more-end">已经到底了</p>
+      </div>
     </section>
   </div>
 </template>
@@ -234,6 +259,14 @@ watch(
   display: flex;
   flex-direction: column;
 }
+.more-wrap { padding: 18px 0 26px; display: flex; justify-content: center; }
+.more-btn {
+  height: 38px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--line);
+  background: #fff; color: #4b463d; font-size: 13.5px; cursor: pointer;
+}
+.more-btn:hover { border-color: #cfc7b9; background: #faf8f4; }
+.more-btn:disabled { opacity: .6; cursor: default; }
+.more-end { font-size: 12.5px; color: #a8a196; }
 
 .chips {
   display: flex;
