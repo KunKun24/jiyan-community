@@ -32,6 +32,39 @@ const route = useRoute()
 const categories = ref<Category[]>([])
 const posts = ref<PostItem[]>([])
 const total = ref(0)
+const chipsRef = ref<HTMLElement | null>(null)
+let dragStartX = 0
+let dragStartLeft = 0
+let dragging = false
+let dragMoved = false
+
+function onDown(e: PointerEvent) {
+  if (e.pointerType !== 'mouse' || !chipsRef.value) return
+  dragging = true
+  dragMoved = false
+  dragStartX = e.clientX
+  dragStartLeft = chipsRef.value.scrollLeft
+  chipsRef.value.classList.add('dragging')
+}
+function onMove(e: PointerEvent) {
+  if (!dragging || !chipsRef.value) return
+  const dx = e.clientX - dragStartX
+  if (Math.abs(dx) > 4) dragMoved = true
+  chipsRef.value.scrollLeft = dragStartLeft - dx
+}
+function onUp() {
+  if (!dragging) return
+  dragging = false
+  chipsRef.value?.classList.remove('dragging')
+}
+function onClickCapture(e: MouseEvent) {
+  if (dragMoved) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragMoved = false
+  }
+}
+
 const loading = ref(true)
 const online = ref(0)
 const trending = ref<PostItem[]>([])
@@ -117,7 +150,7 @@ watch(
       </div>
     </section>
 
-    <nav class="chips" aria-label="板块分类">
+    <nav class="chips" ref="chipsRef" aria-label="板块分类" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onUp" @click.capture="onClickCapture">
       <RouterLink class="chip" :class="{ active: !currentSlug }" to="/forum">
         全部 <em>{{ total }}</em>
       </RouterLink>
@@ -185,13 +218,31 @@ watch(
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 0 0 18px;
+  padding: 2px 0 16px;
   margin-bottom: 6px;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d3c7 transparent;
+  cursor: grab;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips.dragging {
+  cursor: grabbing;
+  scroll-behavior: auto;
+  user-select: none;
 }
 
 .chips::-webkit-scrollbar {
-  display: none;
+  height: 6px;
+}
+
+.chips::-webkit-scrollbar-thumb {
+  background: #ddd6c9;
+  border-radius: 999px;
+}
+
+.chips::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .chip {
