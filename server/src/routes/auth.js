@@ -73,15 +73,13 @@ r.post('/register', async (req, res) => {
     const [ok, msg] = await consumeCode(email, 'register', code)
     if (!ok) return FAIL(res, msg)
 
-    // 邀请码（可选）
+    // 邀请码（可选，一人一码、永久有效、可无限邀请）
     let invitedBy = null
-    let inviteRow = null
     const invite = String(req.body?.invite || '').trim().toUpperCase()
     if (invite) {
-      inviteRow = await one('SELECT * FROM invites WHERE code=?', [invite])
-      if (!inviteRow) return FAIL(res, '邀请码不存在')
-      if (inviteRow.used_by) return FAIL(res, '这个邀请码已经被用过了')
-      invitedBy = inviteRow.inviter_id
+      const inviter = await one('SELECT id FROM users WHERE invite_code=?', [invite])
+      if (!inviter) return FAIL(res, '邀请码不存在')
+      invitedBy = inviter.id
     }
 
     const result = await q('INSERT INTO users (username, email, password_hash, invited_by) VALUES (?,?,?,?)', [
@@ -90,10 +88,16 @@ r.post('/register', async (req, res) => {
       hashPassword(password),
       invitedBy,
     ])
-    if (inviteRow) {
-      await q('UPDATE invites SET used_by=?, used_at=NOW() WHERE id=? AND used_by IS NULL', [result.insertId, inviteRow.id])
-    }
     const user = await one('SELECT * FROM users WHERE id=?', [result.insertId])
+    if (!user.invite_code) {
+      let ic = newInviteCode()
+      for (let i = 0; i < 5; i++) {
+        if (!(await one('SELECT 1 AS x FROM users WHERE invite_code=?', [ic]))) break
+        ic = newInviteCode()
+      }
+      await q('UPDATE users SET invite_code=? WHERE id=?', [ic, user.id])
+      user.invite_code = ic
+    }
     setSessionCookie(res, signSession({ uid: user.id }))
     return OK(res, { user: publicUser(user) }, '注册成功')
   } catch (e) {

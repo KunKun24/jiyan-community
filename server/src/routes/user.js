@@ -271,27 +271,45 @@ function newInviteCode(len = 8) {
   return s
 }
 
+const INVITE_TITLES = [
+  { at: 0, name: '未入门' },
+  { at: 1, name: '引路人' },
+  { at: 5, name: '推广员' },
+  { at: 15, name: '推广大使' },
+  { at: 50, name: '社区引荐人' },
+  { at: 100, name: '星火大使' },
+]
+
+function inviteTitle(n) {
+  let cur = INVITE_TITLES[0]
+  let next = null
+  for (const t of INVITE_TITLES) {
+    if (n >= t.at) cur = t
+    else if (!next) next = t
+  }
+  return { name: cur.name, next: next ? next.name : null, nextAt: next ? next.at : null }
+}
+
 r.get('/invites', auth, async (req, res) => {
   try {
     const uid = req.uid
-    let mine = await q('SELECT id, code, used_by, used_at, created_at FROM invites WHERE inviter_id=? ORDER BY id DESC LIMIT 20', [uid])
-    if (!mine.length) {
-      for (let i = 0; i < 3; i++) {
-        let code = newInviteCode()
-        for (let k = 0; k < 5; k++) {
-          const dup = await one('SELECT 1 AS x FROM invites WHERE code=?', [code])
-          if (!dup) break
-          code = newInviteCode()
-        }
-        await q('INSERT INTO invites (code, inviter_id) VALUES (?,?)', [code, uid])
-      }
-      mine = await q('SELECT id, code, used_by, used_at, created_at FROM invites WHERE inviter_id=? ORDER BY id DESC LIMIT 20', [uid])
-    }
-    const used = await q('SELECT COUNT(*) AS c FROM invites WHERE inviter_id=? AND used_by IS NOT NULL', [uid])
+    const me = await one('SELECT invite_code FROM users WHERE id=?', [uid])
+    if (!me?.invite_code) return FAIL(res, '邀请码还没生成，刷新一下', 500)
+    const invited = await one('SELECT COUNT(*) AS c FROM users WHERE invited_by=?', [uid])
+    const list = await q(
+      'SELECT id, username, avatar, created_at FROM users WHERE invited_by=? ORDER BY id DESC LIMIT 20',
+      [uid],
+    )
+    const n = Number(invited?.c || 0)
+    const title = inviteTitle(n)
     return OK(res, {
       baseUrl: process.env.SITE_BASE_URL || 'http://shequ.xn--0try77c6um82w.cn',
-      invited: Number(used?.c || 0),
-      items: mine.map((i) => ({ id: i.id, code: i.code, used: !!i.used_by, usedAt: i.used_at, createdAt: i.created_at })),
+      code: me.invite_code,
+      invited: n,
+      title: title.name,
+      nextTitle: title.next,
+      nextAt: title.nextAt,
+      items: list.map((u) => ({ id: u.id, username: u.username, avatar: u.avatar, createdAt: u.created_at })),
     })
   } catch (e) {
     console.error('[user.invites]', e)
