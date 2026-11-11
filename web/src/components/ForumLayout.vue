@@ -54,7 +54,7 @@ async function onLogout() {
   <div class="shell">
     <header class="topbar">
       <div class="topbar-inner">
-        <RouterLink class="brand" to="/">
+        <RouterLink class="brand" to="/forum">
           <img src="/logo.png" alt="极验社区" />
           <span>极验社区</span>
         </RouterLink>
