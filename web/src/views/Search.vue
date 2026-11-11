@@ -17,6 +17,8 @@ const router = useRouter()
 const keyword = ref(String(route.query.q || ''))
 const type = ref<'posts' | 'users'>(route.query.type === 'users' ? 'users' : 'posts')
 const loading = ref(false)
+const loadError = ref('')
+let loadTimer: number | undefined
 const posts = ref<PostHit[]>([])
 const users = ref<UserHit[]>([])
 const searched = ref(false)
@@ -32,13 +34,28 @@ async function run() {
     return
   }
   loading.value = true
-  const r = await get<{ items: PostHit[] | UserHit[] }>(
-    `/api/search?q=${encodeURIComponent(q)}&type=${type.value}`,
-  )
-  loading.value = false
-  searched.value = true
-  if (type.value === 'posts') posts.value = (r.data?.items as PostHit[]) || []
-  else users.value = (r.data?.items as UserHit[]) || []
+  loadError.value = ''
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '搜索有点慢，网络可能不稳定。' }
+  }, 8000)
+  try {
+    const r = await get<{ items: PostHit[] | UserHit[] }>(
+      `/api/search?q=${encodeURIComponent(q)}&type=${type.value}`,
+    )
+    if (r.ok) {
+      if (type.value === 'posts') posts.value = (r.data?.items as PostHit[]) || []
+      else users.value = (r.data?.items as UserHit[]) || []
+    } else {
+      loadError.value = r.msg || '搜索失败'
+    }
+  } catch {
+    loadError.value = '搜索失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
+    searched.value = true
+  }
 }
 
 function onInput() {
@@ -74,7 +91,8 @@ watch(() => route.query.q, (v) => {
       <button :class="{ on: type === 'users' }" type="button" @click="switchType('users')">用户</button>
     </div>
 
-    <div v-if="loading" class="hint">搜索中…</div>
+    <SkeletonList v-if="loading" :rows="5" compact />
+    <LoadError v-else-if="loadError" :message="loadError" @retry="run" />
     <div v-else-if="!searched" class="hint">输入关键词开始搜索。</div>
 
     <template v-else-if="type === 'posts'">

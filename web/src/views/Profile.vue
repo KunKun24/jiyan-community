@@ -195,30 +195,48 @@ async function checkin() {
   checkinMsg.value = r.msg
 }
 
-onMounted(async () => {
-  const r = await get<{ user: Profile; stats: { posts: number; replies: number } }>('/api/user/profile')
-  if (!r.ok) {
-    if (r.msg.includes('登录')) router.push('/login')
-    loading.value = false
-    return
-  }
-  profile.value = r.data?.user ?? null
-  level.value = (r.data as { level?: Level })?.level ?? null
-  stats.value = r.data?.stats ?? { posts: 0, replies: 0 }
-  checkedIn.value = !!profile.value?.lastCheckinOn && profile.value.lastCheckinOn === todayStr()
+const loadError = ref('')
+let loadTimer: number | undefined
 
-  const [a, b] = await Promise.all([
-    get<{ posts: MyPost[] }>('/api/user/posts'),
-    get<{ bookmarks: Bookmark[] }>('/api/user/bookmarks'),
-  ])
-  if (a.ok) myPosts.value = a.data?.posts ?? []
-  if (b.ok) bookmarks.value = b.data?.bookmarks ?? []
-  loading.value = false
-})
+async function load() {
+  loading.value = true
+  loadError.value = ''
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '加载时间有点长，网络可能不稳定。' }
+  }, 8000)
+  try {
+    const r = await get<{ user: Profile; stats: { posts: number; replies: number } }>('/api/user/profile')
+    if (!r.ok) {
+      if (r.msg.includes('登录')) { router.push('/login'); return }
+      loadError.value = r.msg || '加载失败'
+      return
+    }
+    profile.value = r.data?.user ?? null
+    level.value = (r.data as { level?: Level })?.level ?? null
+    stats.value = r.data?.stats ?? { posts: 0, replies: 0 }
+    checkedIn.value = !!profile.value?.lastCheckinOn && profile.value.lastCheckinOn === todayStr()
+
+    const [a, b] = await Promise.all([
+      get<{ posts: MyPost[] }>('/api/user/posts'),
+      get<{ bookmarks: Bookmark[] }>('/api/user/bookmarks'),
+    ])
+    if (a.ok) myPosts.value = a.data?.posts ?? []
+    if (b.ok) bookmarks.value = b.data?.bookmarks ?? []
+  } catch {
+    loadError.value = '加载失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
+  }
+}
+
+onMounted(load)
 </script>
 
 <template>
-  <div v-if="loading" class="state">加载中…</div>
+  <SkeletonList v-if="loading" :rows="5" thumb />
+  <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
 
   <div v-else-if="profile" class="profile">
     <header class="phead">

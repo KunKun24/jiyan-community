@@ -22,13 +22,29 @@ const LABEL: Record<string, string> = {
   reply_like: '赞了你的评论',
 }
 
+const loadError = ref('')
+let loadTimer: number | undefined
+
 async function load() {
   loading.value = true
-  const r = await get<{ items: Notice[]; unread: number }>('/api/notifications?size=50')
-  loading.value = false
-  if (r.ok && r.data) {
-    items.value = r.data.items
-    unread.value = r.data.unread
+  loadError.value = ''
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '加载时间有点长，网络可能不稳定。' }
+  }, 8000)
+  try {
+    const r = await get<{ items: Notice[]; unread: number }>('/api/notifications?size=50')
+    if (r.ok && r.data) {
+      items.value = r.data.items
+      unread.value = r.data.unread
+    } else {
+      loadError.value = r.msg || '通知加载失败'
+    }
+  } catch {
+    loadError.value = '加载失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
   }
 }
 
@@ -57,7 +73,8 @@ onMounted(load)
       <button v-if="unread" class="mark" type="button" @click="markAll">全部标为已读</button>
     </div>
 
-    <div v-if="loading" class="hint">加载中…</div>
+    <SkeletonList v-if="loading" :rows="5" compact />
+    <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
     <div v-else-if="!items.length" class="hint">还没有消息。有人回复你或赞你的时候，会出现在这里。</div>
 
     <button

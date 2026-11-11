@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import SkeletonList from '../components/SkeletonList.vue'
+import LoadError from '../components/LoadError.vue'
 import { useRoute } from 'vue-router'
 import { get } from '../api'
 import { fmtNum, timeAgo } from '../format'
@@ -38,6 +40,8 @@ const tags = ref<Tag[]>([])
 const posts = ref<PostItem[]>([])
 const loading = ref(true)
 const notFound = ref(false)
+const loadError = ref('')
+let loadTimer: number | undefined
 
 const tag = ref('')
 const sort = ref<'new' | 'hot'>('new')
@@ -54,11 +58,23 @@ async function loadMeta() {
 
 async function loadPosts() {
   loading.value = true
-  const qs = new URLSearchParams({ category: slug.value, sort: sort.value })
-  if (tag.value) qs.set('tag', tag.value)
-  const r = await get<{ posts: PostItem[] }>(`/api/posts?${qs.toString()}`)
-  if (r.ok) posts.value = r.data?.posts ?? []
-  loading.value = false
+  loadError.value = ''
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '加载时间有点长，网络可能不稳定。' }
+  }, 8000)
+  try {
+    const qs = new URLSearchParams({ category: slug.value, sort: sort.value })
+    if (tag.value) qs.set('tag', tag.value)
+    const r = await get<{ posts: PostItem[] }>(`/api/posts?${qs.toString()}`)
+    if (r.ok) posts.value = r.data?.posts ?? []
+    else loadError.value = r.msg || '帖子加载失败'
+  } catch {
+    loadError.value = '加载失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -113,7 +129,8 @@ watch(slug, async () => {
       </div>
     </div>
 
-    <div v-if="loading" class="state">加载中…</div>
+    <SkeletonList v-if="loading" :rows="5" thumb />
+    <LoadError v-else-if="loadError" :message="loadError" @retry="loadPosts" />
     <div v-else-if="!posts.length" class="state">
       这里还没有帖子。{{ tag ? '换个标签看看，或者' : '' }}发第一条，给大家开个头。
     </div>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import SkeletonList from '../components/SkeletonList.vue'
+import LoadError from '../components/LoadError.vue'
 import { get } from '../api'
 import { fmtNum, timeAgo } from '../format'
 
@@ -17,12 +19,29 @@ interface PostItem {
 
 const posts = ref<PostItem[]>([])
 const loading = ref(true)
+const loadError = ref('')
+let loadTimer: number | undefined
 
-onMounted(async () => {
-  const r = await get<{ posts: PostItem[] }>('/api/posts?sort=hot&size=30')
-  if (r.ok) posts.value = r.data?.posts ?? []
-  loading.value = false
-})
+async function load() {
+  loading.value = true
+  loadError.value = ''
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '加载时间有点长，网络可能不稳定。' }
+  }, 8000)
+  try {
+    const r = await get<{ posts: PostItem[] }>('/api/posts?sort=hot&size=30')
+    if (r.ok) posts.value = r.data?.posts ?? []
+    else loadError.value = r.msg || '加载失败'
+  } catch {
+    loadError.value = '加载失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
+  }
+}
+
+onMounted(load)
 </script>
 
 <template>
@@ -32,7 +51,8 @@ onMounted(async () => {
       <p>按被看过的次数排，看的人越多越靠前。</p>
     </header>
 
-    <div v-if="loading" class="state">加载中…</div>
+    <SkeletonList v-if="loading" :rows="8" compact />
+    <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
     <div v-else-if="!posts.length" class="state">还没有帖子。等有人来看，这里就会热起来。</div>
 
     <ol v-else class="list">

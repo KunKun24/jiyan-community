@@ -89,16 +89,21 @@ async function load() {
     loading.value = false
     return
   }
-  const r = await get<{ user: HomeUser; stats: typeof stats.value; posts: HomePost[] }>(`/api/users/${id}`)
-  loading.value = false
-  if (!r.ok || !r.data) {
-    error.value = r.msg || '用户不存在'
-    return
+  try {
+    const r = await get<{ user: HomeUser; stats: typeof stats.value; posts: HomePost[] }>(`/api/users/${id}`)
+    if (!r.ok || !r.data) {
+      error.value = r.msg || '用户不存在'
+      return
+    }
+    user.value = r.data.user
+    stats.value = r.data.stats
+    posts.value = r.data.posts
+    document.title = `${r.data.user.username} · 极验社区`
+  } catch {
+    error.value = '加载失败，请检查网络后重试。'
+  } finally {
+    loading.value = false
   }
-  user.value = r.data.user
-  stats.value = r.data.stats
-  posts.value = r.data.posts
-  document.title = `${r.data.user.username} · 极验社区`
 }
 
 onMounted(load)
@@ -107,7 +112,8 @@ watch(() => route.params.id, load)
 
 <template>
   <div class="page">
-    <div v-if="loading" class="empty">加载中…</div>
+    <SkeletonList v-if="loading" :rows="3" thumb />
+    <LoadError v-else-if="error && error !== '用户不存在'" :message="error" @retry="load" />
     <div v-else-if="error" class="empty">{{ error }}</div>
 
     <template v-else-if="user">

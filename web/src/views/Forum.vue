@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import SkeletonList from '../components/SkeletonList.vue'
+import LoadError from '../components/LoadError.vue'
 import { useRoute } from 'vue-router'
 import { get } from '../api'
 import { timeAgo } from '../format'
@@ -66,6 +68,14 @@ function onClickCapture(e: MouseEvent) {
 }
 
 const loading = ref(true)
+const loadError = ref('')
+let loadTimer: number | undefined
+function armTimeout() {
+  window.clearTimeout(loadTimer)
+  loadTimer = window.setTimeout(() => {
+    if (loading.value) { loading.value = false; loadError.value = '加载时间有点长，网络可能不稳定。' }
+  }, 8000)
+}
 const online = ref(0)
 const trending = ref<PostItem[]>([])
 const weekly = ref<PostItem[]>([])
@@ -84,13 +94,23 @@ async function loadCategories() {
 
 async function loadPosts() {
   loading.value = true
-  const qs = currentSlug.value ? `?category=${encodeURIComponent(currentSlug.value)}` : ''
-  const r = await get<{ posts: PostItem[]; total: number }>(`/api/posts${qs}`)
-  if (r.ok) {
-    posts.value = r.data?.posts ?? []
-    total.value = r.data?.total ?? 0
+  loadError.value = ''
+  armTimeout()
+  try {
+    const qs = currentSlug.value ? `?category=${encodeURIComponent(currentSlug.value)}` : ''
+    const r = await get<{ posts: PostItem[]; total: number }>(`/api/posts${qs}`)
+    if (r.ok) {
+      posts.value = r.data?.posts ?? []
+      total.value = r.data?.total ?? 0
+    } else {
+      loadError.value = r.msg || '帖子加载失败'
+    }
+  } catch {
+    loadError.value = '加载失败，请检查网络后重试。'
+  } finally {
+    window.clearTimeout(loadTimer)
+    loading.value = false
   }
-  loading.value = false
 }
 
 async function loadHighlights() {
@@ -166,7 +186,8 @@ watch(
     </nav>
 
     <section class="feed">
-      <div v-if="loading" class="empty">加载中…</div>
+      <SkeletonList v-if="loading" :rows="6" thumb />
+      <LoadError v-else-if="loadError" :message="loadError" @retry="loadPosts" />
       <div v-else-if="!posts.length" class="empty">
         这里还空着。发第一条帖子，给大家开个头。
       </div>
