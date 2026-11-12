@@ -49,3 +49,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test (web, amd64)
+        if: matrix.image == 'web'
+        run: |
+          docker build -f web/Dockerfile -t shequ-web:smoke .
+          docker run -d --name shequ-web-smoke --add-host server:127.0.0.1 -p 18080:80 shequ-web:smoke
+          sleep 3
+          body=$(curl -s http://127.0.0.1:18080/ || true)
+          echo "$body" | head -5
+          echo "$body" | grep -q '<div id="app"' || { docker logs shequ-web-smoke; exit 1; }
+          docker rm -f shequ-web-smoke
