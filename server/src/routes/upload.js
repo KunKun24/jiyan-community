@@ -5,7 +5,7 @@ import path from 'node:path'
 import { sessionUser } from '../session.js'
 
 const r = Router()
-const dir = '/www/wwwroot/极验社区/web/uploads/media'
+const dir = process.env.UPLOAD_DIR || '/www/wwwroot/极验社区/web/uploads/media'
 fs.mkdirSync(dir, { recursive: true })
 
 const storage = multer.diskStorage({

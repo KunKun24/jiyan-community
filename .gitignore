@@ -7,6 +7,7 @@ web/dist/
 # 环境变量
 .env
 .env.*
+!.env.docker.example
 !.env.example
 
 # 日志

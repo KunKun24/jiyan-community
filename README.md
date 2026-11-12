@@ -52,6 +52,21 @@ npm run build          # 产物输出到 web/dist
 
 Nginx 静态托管 `web/dist`，`/api/` 反向代理到 `127.0.0.1:3000`，后端由 PM2 托管。
 
+## Docker 部署
+
+```bash
+cp .env.docker.example .env    # 改密码、SESSION_SECRET、SMTP
+docker compose up -d --build
+```
+
+浏览器打开 `http://服务器IP:8080`。
+
+- 四个服务：`web`（nginx + 前端静态文件）、`server`（Express + WebSocket）、`mysql`、`redis`
+- MySQL 首次启动会按顺序导入 `server/sql/*.sql`
+- 上传的图片/视频在 `uploads` 数据卷，`server` 与 `web` 共享
+- 多架构镜像（`linux/amd64`、`linux/arm64`）：`ghcr.io/kunkun24/jiyan-community-web`、`ghcr.io/kunkun24/jiyan-community-server`
+
+
 ## 许可证
 
 [MIT](./LICENSE)

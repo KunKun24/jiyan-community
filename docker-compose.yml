@@ -1,0 +1,75 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: ghcr.io/kunkun24/jiyan-community-web:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - uploads:/data/uploads:ro
+    depends_on:
+      - server
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: ghcr.io/kunkun24/jiyan-community-server:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-shequ}
+      DB_USER: ${DB_USER:-shequ}
+      DB_PASSWORD: ${DB_PASSWORD:-shequ-change-me}
+      REDIS_URL: redis://redis:6379
+      UPLOAD_DIR: /data/uploads/media
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-shequ}
+      MYSQL_USER: ${DB_USER:-shequ}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-shequ-change-me}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root-change-me}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db:/var/lib/mysql
+      - ./server/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./server/sql/forum.sql:/docker-entrypoint-initdb.d/02-forum.sql:ro
+      - ./server/sql/round2.sql:/docker-entrypoint-initdb.d/03-round2.sql:ro
+      - ./server/sql/round3.sql:/docker-entrypoint-initdb.d/04-round3.sql:ro
+      - ./server/sql/features.sql:/docker-entrypoint-initdb.d/05-features.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASS:-root-change-me}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - cache:/data
+
+volumes:
+  db:
+  cache:
+  uploads:
